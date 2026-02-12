@@ -3,3 +3,4 @@
 .RData
 .Ruserdata
 data/netherlands_data/occurrence.csv
+samples/samples_spatial_uneveneffort.rds

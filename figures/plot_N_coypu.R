@@ -52,13 +52,13 @@ ggsave("figures/multiyear_full.png", plot_multiyear, height = 8, width = 8)
 
 # plot multiyear N - five months
 samples_5m <- MCMCsummary(readRDS("samples/samples_multiyear_5mon.rds"))
-samples_5m <- data.frame(
-  N = samples_my[1:(10 * 15), "mean"],
+df_5m <- data.frame(
+  N = samples_5m[1:(10 * 15), "mean"],
   year = rep(2015:2024, times = 15)
 ) %>% 
   arrange(year) %>% 
   mutate(geometry = rep(communes_shp$geometry, 10))
-plot_5m <- ggplot(data = st_as_sf(samples_5m)) +
+plot_5m <- ggplot(data = st_as_sf(df_5m)) +
   geom_sf(aes(fill = N)) +
   facet_wrap(~ year, ncol = 3) +
   scale_fill_viridis() +
