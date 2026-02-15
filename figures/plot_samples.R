@@ -1,7 +1,7 @@
 library(tidyverse)
 library(MCMCvis)
 
-samp <- readRDS("samples/samples_spatiotemporal.rds")
+samp <- readRDS("samples/samples_spatio_timeranef_hmc_test.rds")
 
 param1 <- "s_s[5]"
 param2 <- "s_s[1]"
@@ -12,16 +12,16 @@ ggplot() +
 
 summary <- MCMCsummary(samp)
 
-param <- "s_s[1]"
+param <- "N[4, 13]"
 
 ggplot() +
-  geom_line(aes(x = 1:12000,
+  geom_line(aes(x = 1:length(samp[[1]][, param]),
                 y = samp[[1]][, param]), color = "blue") +
-  geom_line(aes(x = 1:12000,
+  geom_line(aes(x = 1:length(samp[[1]][, param]),
                 y = samp[[2]][, param]), color = "purple") +
-  geom_line(aes(x = 1:12000,
+  geom_line(aes(x = 1:length(samp[[1]][, param]),
                 y = samp[[3]][, param]), color = "yellow") +
-  geom_line(aes(x = 1:12000,
+  geom_line(aes(x = 1:length(samp[[1]][, param]),
                 y = samp[[4]][, param]), color = "green")
 
 alpha <- out[151:1950, "mean"]

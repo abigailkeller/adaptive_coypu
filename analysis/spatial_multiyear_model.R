@@ -7,6 +7,7 @@ library(nimble)
 library(MCMCvis)
 library(sp)
 library(spdep)
+library(parallel)
 
 # import data
 raw_dat <- readRDS("data/coypus.rds")
@@ -36,16 +37,16 @@ commune_convert <- data.frame(
 
 # format data
 dat <- raw_dat$removal_coypus %>%
-  # filter(Month %in% c(2, 3, 4, 5, 6)) %>%
+  filter(Month %in% c(2, 3, 4, 5, 6)) %>%
   # mutate(Year = as_factor(Year)) %>%
   pivot_wider(names_from = Month, 
               values_from = n)
 dat_st <- array(NA, dim = c(length(unique(dat$Year)),
                             length(unique(dat$commune)),
-                            length(unique(raw_dat$removal_coypus$Month))))
+                            5))
 year_vec <- unique(dat$Year)
 for (i in seq_along(year_vec)) {
-  dat_st[i, , ] <- as.matrix(dat[dat$Year == year_vec[i], 3:14])
+  dat_st[i, , ] <- as.matrix(dat[dat$Year == year_vec[i], 3:7])
 }
 
 # get total n
@@ -57,7 +58,7 @@ for (i in 1:length(year_vec)) {
 
 # add temp and raw data to spatial data
 communes_shp$temp <- temperature$avg
-communes_shp$remove_2022 <- rowSums(dat[dat$Year == 2022, 3:14])
+communes_shp$remove_2022 <- rowSums(dat[dat$Year == 2022, 3:7])
 
 # ggplot(data = communes_shp) +
 #   geom_sf(aes(fill = remove_2022)) +
@@ -185,43 +186,69 @@ inits <- function(){
        s_s = rnorm(K))
   }
 
-# create Nimble model
-Rmodel <- nimbleModel(code = model_code, 
-                      constants = constants, 
-                      data = data, 
-                      inits = inits())
-Rmcmc <- compileNimble(Rmodel, showCompilerOutput = F)
-ModSpec <- configureMCMC(Rmodel, onlySlice = TRUE) # slice sampling 
-ModSpec$resetMonitors()
-ModSpec$addMonitors(c("alpha", "N", "beta", "sigma_s", "s_s"#,
-                      #"fit1.data","fit1.pred","fit2.data","fit2.pred"
-                      )
-                    )
-Cmcmc <- buildMCMC(ModSpec)
-Cmodel <- compileNimble(Cmcmc, project = Rmodel, resetFunctions = TRUE)
-
 # run model
 ni <- 100000 * 4
 nb <- 5000 * 4
-nc <- 4
+nc <- 2
 nt <- 15
-samp <- runMCMC(Cmodel, niter = ni, nburnin = nb, 
-                nchains = nc, thin = nt, inits = inits,
-                samplesAsCodaMCMC = TRUE)
+
+########################
+# run MCMC in parallel #
+########################
+
+cl <- makeCluster(nc)
+
+clusterExport(cl, c("model_code", "inits", "data", "constants",
+                    "ni", "nt", "J", "K", "pic.init", "Nin"))
+
+out <- clusterEvalQ(cl, {
+  library(nimble)
+  library(coda)
+  
+  # create Nimble model
+  Rmodel <- nimbleModel(code = model_code, 
+                        constants = constants, 
+                        data = data, 
+                        inits = inits())
+  
+  # compile the model
+  Rmcmc <- compileNimble(Rmodel, showCompilerOutput = F)
+  
+  # build the MCMC
+  ModSpec <- configureMCMC(Rmodel, onlySlice = TRUE,
+                           monitors = c("alpha", "N", "beta", "sigma_s", 
+                                        "s_s"#,
+                                        #"fit1.data","fit1.pred","fit2.data",
+                                        #"fit2.pred"
+                                        )
+                           )
+  Cmcmc <- buildMCMC(ModSpec)
+  
+  # compile MCMC and model
+  Cmodel <- compileNimble(Cmcmc, project = Rmodel, resetFunctions = TRUE)
+  
+  # run MCMC
+  Cmodel$run(niter = ni, thin = nt)
+  
+  samples <- as.mcmc(as.matrix(Cmodel$mvSamples))
+  
+  return(samples)
+  
+})
+
+# discard burnin
+sequence <- seq(nb, floor(ni / nt), 1)
+out_sub <- list(out[[1]][sequence, ], out[[2]][sequence, ])
 
 # get summary of results
-out <- MCMCsummary(samp)
-
-samp_sub <- list(
-  samp[[1]][seq(1, 25333, 10), ], samp[[2]][seq(1, 25333, 10), ],
-  samp[[3]][seq(1, 25333, 10), ], samp[[4]][seq(1, 25333, 10), ]
-)
-out_sub <- MCMCsummary(samp_sub)
+out <- MCMCsummary(out_sub)
 
 # save samples
-saveRDS(samp, "samples/samples_spatial.rds")
+saveRDS(out_sub, "samples/samples_spatial.rds")
+
+stopCluster(cl)
 
 # check convergence
-MCMCtrace(samp, params = c("N[3, 9]"), pdf = FALSE)
+# MCMCtrace(samp, params = c("N[3, 9]"), pdf = FALSE)
 
 
