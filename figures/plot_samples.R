@@ -1,7 +1,7 @@
 library(tidyverse)
 library(MCMCvis)
 
-samp <- readRDS("samples/samples_spatio_timeranef_hmc_test.rds")
+samp <- readRDS("samples/samples_spatio_timeranef_hmc_onealpha.rds")
 
 param1 <- "s_s[5]"
 param2 <- "s_s[1]"
@@ -12,7 +12,7 @@ ggplot() +
 
 summary <- MCMCsummary(samp)
 
-param <- "N[4, 13]"
+param <- "N[5, 13]"
 
 ggplot() +
   geom_line(aes(x = 1:length(samp[[1]][, param]),
@@ -24,11 +24,11 @@ ggplot() +
   geom_line(aes(x = 1:length(samp[[1]][, param]),
                 y = samp[[4]][, param]), color = "green")
 
-alpha <- out[151:1950, "mean"]
+alpha <- summary[151:155, "mean"]
 hist(alpha)
 hist(1 - exp(-exp(alpha)))
 
-ggplot() +
+ ggplot() +
   geom_density(aes(x = alpha), fill = "blue", alpha = 0.6) +
   geom_density(aes(x = rnorm(10000, 0, 1.5)), alpha = 0.6)
 

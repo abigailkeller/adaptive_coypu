@@ -147,6 +147,9 @@ model_code <- nimbleCode({
   for (j in 1:J){
     alpha[j] ~ dnorm(0, sd = 1.5)
   }
+  # for (j in 1:J){
+  #   alpha[j] ~ dunif(0, 1)
+  # }
   for (k in 1:2){
     beta[k] ~ dnorm(0, sd = 1.5)
   }
@@ -199,8 +202,8 @@ inits <- function(){
 # nb <- 5000 * 4
 # nc <- 4
 # nt <- 15
-ni <- 500 * 4
-nb <- 100 * 4
+ni <- 5000 * 4
+nb <- 1000 * 4
 nc <- 4
 nt <- 1
 
@@ -252,15 +255,10 @@ sequence <- seq(nb, floor(ni / nt), 1)
 out_sub <- list(out[[1]][sequence, ], out[[2]][sequence, ],
                 out[[3]][sequence, ], out[[4]][sequence, ])
 
-# get summary of results
-# out <- MCMCsummary(out_sub)
-
 # save samples
-saveRDS(out_sub, "samples/samples_spatio_timeranef_hmc_test.rds")
+saveRDS(out_sub, "samples/samples_spatio_timeranef_hmc_mean0.rds")
 
 stopCluster(cl)
 
-# check convergence
-# MCMCtrace(samp, params = c("N[3, 9]"), pdf = FALSE)
 
 
