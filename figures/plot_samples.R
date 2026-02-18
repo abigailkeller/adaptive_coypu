@@ -1,7 +1,7 @@
 library(tidyverse)
 library(MCMCvis)
 
-samp <- readRDS("samples/samples_spatio_timeranef_hmc_onealpha.rds")
+samp <- readRDS("samples/samples_spatio_timeranef_hmc_twoalpha.rds")
 
 param1 <- "s_s[5]"
 param2 <- "s_s[1]"
@@ -12,7 +12,7 @@ ggplot() +
 
 summary <- MCMCsummary(samp)
 
-param <- "N[5, 13]"
+param <- "N[3, 2]"
 
 ggplot() +
   geom_line(aes(x = 1:length(samp[[1]][, param]),
