@@ -47,55 +47,72 @@ occitanie_raster <- st_bbox(c(xmin = -0.35,
   terra::vect() %>%
   terra::rast()
 
-Dir.Base <- getwd() # identifying the current directory
-Dir.Data <- file.path(Dir.Base, "data") # folder path for data
+Dir.Data <- file.path(getwd(), "data/temp") # folder path for data
 
-toccitanie <- CDownloadS(
-  Variable = "2m_temperature",
-  DataSet = "reanalysis-era5-land-monthly-means",
-  Type = "monthly_averaged_reanalysis",
-  DateStart = "2015-01-12 00:00",
-  DateStop = "2016-03-31 23:00",
-  TZone = "Europe/Paris",
-  TResolution = "month",
-  TStep = 1,
-  Extent = occitanie_raster, # our data.frame with Lat and Lon columns
-  Dir = Dir.Data,
-  FileName = "Toccitanie",
-  API_User = "olivier.gimenez@cefe.cnrs.fr",
-  API_Key = "ccb31c25-7603-4cd7-8e88-97c8eb6e9cbd"
-)
+# get temp in January of every year
+years <- c("2016", "2017", "2018", "2019", "2020", 
+           "2021", "2022", "2023", "2024")
 
+for (i in 1:length(years)) {
+  toccitanie <- CDownloadS(
+    Variable = "2m_temperature",
+    DataSet = "reanalysis-era5-land-monthly-means",
+    Type = "monthly_averaged_reanalysis",
+    DateStart = paste0(years[i], "-01-01 00:00"),
+    DateStop = paste0(years[i], "-01-31 23:00"),
+    TZone = "Europe/Paris",
+    TResolution = "month",
+    TStep = 1,
+    Extent = occitanie_raster, # our data.frame with Lat and Lon columns
+    Dir = Dir.Data,
+    FileName = paste0("Toccitanie_", years[i]),
+    API_User = "olivier.gimenez@cefe.cnrs.fr",
+    API_Key = "ccb31c25-7603-4cd7-8e88-97c8eb6e9cbd"
+  )
+  
+  
+  terra::writeRaster(x = toccitanie,
+                     filename = paste0("data/temp/temp_", years[i], ".tif"),
+                     overwrite = TRUE)
+}
 
-terra::writeRaster(x = toccitanie,
-                  filename = "data/shp/temp.tif",
-                  overwrite = TRUE)
+# toccitanie <- terra::rast("data/shp/temp.tif")
 
-toccitanie <- terra::rast("data/shp/temp.tif")
-
-Plot.SpatRast(toccitanie$`2m_temperature_1`) + 
+Plot.SpatRast(toccitanie_2016$`2m_temperature`) + 
   geom_sf(data = dpts_occitanie %>% 
             st_union() %>%
             st_transform(crs = 4326), 
              fill = NA)
 
+# join all years together
+
+
 # extract temperature per commune
 
-temp_communes <- terra::extract(toccitanie, dpts_occitanie_sub) %>%
+temp_communes <- terra::extract(terra::rast("data/temp/temp_2016.tif"), 
+                                dpts_occitanie_sub) %>%
   group_by(ID) %>%
-  summarise(tdec = mean(`2m_temperature_11`, na.rm = T),
-            tjan = mean(`2m_temperature_1`, na.rm = T),
-            tfeb = mean(`2m_temperature_2`, na.rm = T),
-            tmar = mean(`2m_temperature_3`, na.rm = T),
+  summarise(t2016 = weathermetrics::kelvin.to.celsius(
+    mean(`2m_temperature`, na.rm = T)
+    )
   )
 
-
+for (i in 2:length(years)) {
+  
+  temp_df <- terra::extract(terra::rast(paste0("data/temp/temp_", 
+                                               years[i], ".tif")), 
+                            dpts_occitanie_sub) %>%
+    group_by(ID) %>%
+    summarise(!!paste0("t", years[i]) := weathermetrics::kelvin.to.celsius(
+      mean(`2m_temperature`, na.rm = T)
+      )
+    )
+  
+  temp_communes <- left_join(temp_communes, temp_df)
+  
+}
 
 temp_communes <- temp_communes %>% 
-  mutate(tdec = weathermetrics::kelvin.to.celsius(tdec),
-         tjan = weathermetrics::kelvin.to.celsius(tjan),
-         tfeb = weathermetrics::kelvin.to.celsius(tfeb),
-         tmar = weathermetrics::kelvin.to.celsius(tmar),
-         commune = communes_clean)
+  mutate(commune = communes_clean)
 
-saveRDS(temp_communes, "data/temperature.rds")
+saveRDS(temp_communes, "data/temp/temperature.rds")

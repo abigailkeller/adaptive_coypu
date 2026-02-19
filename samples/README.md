@@ -1,3 +1,15 @@
+`samples_spatio_timeranef_hmc_twoalpha.rds`
+
+- p[t, i, j] <- p_detect * sampled[t, i, j]
+- p_detect ~ dunif(0, 1)
+- p_sample ~ dunif(0, 1)
+
+`samples_spatio_timeranef_hmc_twoalpha_transform.rds`
+
+- p[t, i, j] <- ilogit(p_detect) * sampled[t, i, j]
+- p_detect ~ dunif(-10, 10)
+- p_sample ~ dunif(0, 1)
+
 `samples_spatio_timeranef_hmc_onealpha.rds`
 
 - alpha ~ dunif(-10, 10)

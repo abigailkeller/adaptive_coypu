@@ -3,16 +3,17 @@ library(MCMCvis)
 
 samp <- readRDS("samples/samples_spatio_timeranef_hmc_twoalpha.rds")
 
-param1 <- "s_s[5]"
-param2 <- "s_s[1]"
+param1 <- "N[2, 4]"
+param2 <- "p_detect"
 
 ggplot() +
-  geom_point(aes(x = samp[[1]][, param1],
-                 y = samp[[1]][, param2]))
+  geom_point(aes(x = samp[[2]][, param1],
+                 y = samp[[2]][, param2])) +
+  labs(x = param1, y = param2)
 
 summary <- MCMCsummary(samp)
 
-param <- "N[3, 2]"
+param <- "s_s[2]"
 
 ggplot() +
   geom_line(aes(x = 1:length(samp[[1]][, param]),

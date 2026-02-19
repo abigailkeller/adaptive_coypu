@@ -13,9 +13,8 @@ library(nimbleHMC)
 
 # import data
 raw_dat <- readRDS("data/coypus.rds")
-temperature <- readRDS("data/temperature.rds") %>% 
-  mutate(avg = rowMeans(cbind(tdec, tjan, tfeb, tmar), na.rm = TRUE))
-communes_shp <- st_read("data/shp/communes.shp")
+temperature <- t(as.matrix(readRDS("data/temp/temperature.rds")[, 2:10]))
+communes_shp <- st_read("data/communes_shp/communes.shp")
 
 # reorder communes
 communes_shp <- communes_shp[match(temperature$commune, communes_shp$dpts_cl), ]
@@ -39,7 +38,8 @@ commune_convert <- data.frame(
 
 # format data
 dat <- raw_dat$removal_coypus %>%
-  filter(Month %in% c(2, 3, 4, 5, 6)) %>%
+  filter(Month %in% c(2, 3, 4, 5, 6),
+         Year > 2015) %>%
   # mutate(Year = as_factor(Year)) %>%
   pivot_wider(names_from = Month, 
               values_from = n)
@@ -59,8 +59,8 @@ for (i in 1:length(year_vec)) {
 }
 
 # add temp and raw data to spatial data
-communes_shp$temp <- temperature$avg
-communes_shp$remove_2022 <- rowSums(dat[dat$Year == 2022, 3:7])
+# communes_shp$temp <- temperature$avg
+# communes_shp$remove_2022 <- rowSums(dat[dat$Year == 2022, 3:7])
 
 # ggplot(data = communes_shp) +
 #   geom_sf(aes(fill = remove_2022)) +
@@ -96,8 +96,8 @@ constants <- list(K = K, J = J, M = M,
 data <- list(
   y = dat_st,
   n = n,
-  temp = (temperature$avg - mean(temperature$avg)) / 
-               sd(temperature$avg)
+  temp = (temperature - mean(temperature)) / 
+               sd(temperature)
   )
 
 # model code
@@ -116,7 +116,7 @@ model_code <- nimbleCode({
       n[t, i] ~ dbin(pcap[t, i], N[t, i]) # for each site
       # likelihood: process
       N[t, i] ~ dpois(lambda[t, i]) # for each site
-      log(lambda[t, i]) <- beta[1] + beta[2] * temp[i] + s_s[i] + s_t[t]
+      log(lambda[t, i]) <- beta[1] + beta[2] * temp[t, i] + s_s[i] + s_t[t]
       
       # capture prob
       for (j in 1:J){
@@ -262,7 +262,7 @@ out_sub <- list(out[[1]][sequence, ], out[[2]][sequence, ],
                 out[[3]][sequence, ], out[[4]][sequence, ])
 
 # save samples
-saveRDS(out_sub, "samples/samples_spatio_timeranef_hmc_twoalpha.rds")
+saveRDS(out_sub, "samples/samples_spatio_timeranef_hmc_twoalpha_transform.rds")
 
 stopCluster(cl)
 
