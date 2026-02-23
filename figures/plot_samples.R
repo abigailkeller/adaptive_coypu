@@ -1,19 +1,21 @@
 library(tidyverse)
 library(MCMCvis)
 
-samp <- readRDS("samples/samples_spatio_timeranef_hmc_twoalpha.rds")
+samp <- readRDS("samples/samples_spatio_timeranef_hmc_twoalpha_prior.rds")
 
 param1 <- "N[2, 4]"
 param2 <- "p_detect"
 
 ggplot() +
-  geom_point(aes(x = samp[[2]][, param1],
-                 y = samp[[2]][, param2])) +
+  geom_point(aes(x = c(samp[[1]][, param1], samp[[2]][, param1],
+                       samp[[3]][, param1], samp[[4]][, param1]),
+                 y = c(samp[[1]][, param2], samp[[2]][, param2], 
+                       samp[[3]][, param2], samp[[4]][, param2]))) +
   labs(x = param1, y = param2)
 
 summary <- MCMCsummary(samp)
 
-param <- "s_s[2]"
+param <- "p_detect"
 
 ggplot() +
   geom_line(aes(x = 1:length(samp[[1]][, param]),
@@ -23,7 +25,8 @@ ggplot() +
   geom_line(aes(x = 1:length(samp[[1]][, param]),
                 y = samp[[3]][, param]), color = "yellow") +
   geom_line(aes(x = 1:length(samp[[1]][, param]),
-                y = samp[[4]][, param]), color = "green")
+                y = samp[[4]][, param]), color = "green") +
+  labs(x = "iteration", y = param)
 
 alpha <- summary[151:155, "mean"]
 hist(alpha)

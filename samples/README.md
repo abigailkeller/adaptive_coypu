@@ -1,3 +1,14 @@
+`samples_spatio_timeranef_hmc_twoalpha_temp.rds`
+
+- log(lambda[t, i]) <- beta[1] + beta[2] * temp[t, i] + s_s[i] + s_t[t]
+- p[t, i, j] <- p_detect * sampled[t, i, j]
+- p_detect ~ dunif(0, 1)
+- p_sample ~ dunif(0, 1)
+
+`samples_spatio_timeranef_hmc_twoalpha_prior.rds`
+
+- p_detect ~ dlnorm(meanlog = log(0.02), sdlog = 0.3)
+
 `samples_spatio_timeranef_hmc_twoalpha.rds`
 
 - p[t, i, j] <- p_detect * sampled[t, i, j]
@@ -9,6 +20,11 @@
 - p[t, i, j] <- ilogit(p_detect) * sampled[t, i, j]
 - p_detect ~ dunif(-10, 10)
 - p_sample ~ dunif(0, 1)
+
+`samples_spatio_timeranef_hmc_twoalpha_mu.rds`
+
+- N[t, i] ~ dpois(mu[t, i] / p_detect) 
+- log(mu[t, i]) <- beta[1] + beta[2] * temp[t, i] + s_s[i] + s_t[t]
 
 `samples_spatio_timeranef_hmc_onealpha.rds`
 

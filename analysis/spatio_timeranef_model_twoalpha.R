@@ -13,7 +13,7 @@ library(nimbleHMC)
 
 # import data
 raw_dat <- readRDS("data/coypus.rds")
-temperature <- t(as.matrix(readRDS("data/temp/temperature.rds")[, 2:10]))
+temperature <- readRDS("data/temp/temperature.rds")
 communes_shp <- st_read("data/communes_shp/communes.shp")
 
 # reorder communes
@@ -29,6 +29,9 @@ commune_convert <- data.frame(
                "saint_nazaire_de_pezan", "saint_vincent_de_barbeyrargues",
                "valergues")
 )
+
+# convert temp data to matrix
+temp_mat <- t(as.matrix(temperature[, 2:10]))
 
 # plot communes
 # ggplot(data = communes_shp) +
@@ -96,8 +99,8 @@ constants <- list(K = K, J = J, M = M,
 data <- list(
   y = dat_st,
   n = n,
-  temp = (temperature - mean(temperature)) / 
-               sd(temperature)
+  temp = (temp_mat - mean(temp_mat)) / 
+               sd(temp_mat)
   )
 
 # model code
@@ -242,6 +245,9 @@ out <- clusterEvalQ(cl, {
                                          "s_s", "s_t")
   )
   
+  # confModel$removeSamplers(c("p_sample", "p_detect"), print = FALSE)
+  # confModel$addSampler(target = c("p_sample", "p_detect"), type = "RW")
+  
   # build an HMC algorithm
   HMC <- buildMCMC(confModel)
   CHMC <- compileNimble(HMC, project = Rmodel)
@@ -262,7 +268,7 @@ out_sub <- list(out[[1]][sequence, ], out[[2]][sequence, ],
                 out[[3]][sequence, ], out[[4]][sequence, ])
 
 # save samples
-saveRDS(out_sub, "samples/samples_spatio_timeranef_hmc_twoalpha_transform.rds")
+saveRDS(out_sub, "samples/samples_spatio_timeranef_hmc_twoalpha_mu.rds")
 
 stopCluster(cl)
 
