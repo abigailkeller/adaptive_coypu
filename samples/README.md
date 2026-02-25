@@ -1,3 +1,19 @@
+`samples_spatio_timeranef_rw_twoalpha.rds`
+
+- like `samples_spatio_timeranef_hmc_twoalpha_temp.rds` but just sampled longer with RW
+- ni = 2000000 * 4
+- nb = 50000 * 4
+- nc = 4
+- nt = 1000
+
+`samples_spatio_timeranef_rw&amp;hmc_twoalpha.rds`
+
+- HMC for ranefs, slice sampler for N, and RW for everything else
+
+`samples_spatio_timeranef_hmc_twoalpha_contN.rds`
+
+- made N a continuous variable, used HMC for everything
+
 `samples_spatio_timeranef_hmc_twoalpha_temp.rds`
 
 - log(lambda[t, i]) <- beta[1] + beta[2] * temp[t, i] + s_s[i] + s_t[t]

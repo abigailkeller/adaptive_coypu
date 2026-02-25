@@ -206,14 +206,14 @@ inits <- function(){
   }
 
 # run model
-# ni <- 50000 * 4
-# nb <- 5000 * 4
-# nc <- 4
-# nt <- 15
-ni <- 5000 * 4
-nb <- 1000 * 4
+ni <- 2000000 * 4
+nb <- 50000 * 4
 nc <- 4
-nt <- 1
+nt <- 1000
+# ni <- 5000 * 4
+# nb <- 1000 * 4
+# nc <- 4
+# nt <- 1
 
 ########################
 # run MCMC in parallel #
@@ -239,36 +239,39 @@ out <- clusterEvalQ(cl, {
   # compile the model
   Rmcmc <- compileNimble(Rmodel, showCompilerOutput = F)
   
-  confModel <- configureHMC(Rmodel,
-                            monitors = c("p_sample", "p_detect", "sampled",
-                                         "N", "beta", "sigma_s",
-                                         "s_s", "s_t")
+  # build the MCMC
+  ModSpec <- configureMCMC(Rmodel, 
+                           monitors = c("p_sample", "p_detect", "sampled",
+                                        "N", "beta", "sigma_s",
+                                        "s_s", "s_t")
   )
   
-  # confModel$removeSamplers(c("p_sample", "p_detect"), print = FALSE)
-  # confModel$addSampler(target = c("p_sample", "p_detect"), type = "RW")
+  # add HMC
+  # ModSpec$removeSamplers(target = c("s_s", "s_t", "beta", "sigma_s"))
+  # ModSpec$addSampler(target = c("s_s", "s_t", "beta", "sigma_s"),
+  #                    type = "NUTS")
   
-  # build an HMC algorithm
-  HMC <- buildMCMC(confModel)
-  CHMC <- compileNimble(HMC, project = Rmodel)
+  Cmcmc <- buildMCMC(ModSpec)
+  
+  # compile MCMC and model
+  Cmodel <- compileNimble(Cmcmc, project = Rmodel, resetFunctions = TRUE)
   
   # run MCMC
-  CHMC$run(niter = ni, thin = nt)
+  Cmodel$run(niter = ni, thin = nt)
   
-  # samples <- as.mcmc(as.matrix(Cmodel$mvSamples))
-  samples <- as.mcmc(as.matrix(CHMC$mvSamples))
+  samples <- as.mcmc(as.matrix(Cmodel$mvSamples))
   
   return(samples)
   
 })
 
 # discard burnin
-sequence <- seq(nb, floor(ni / nt), 1)
+sequence <- seq(nb / nt, ni / nt, 1)
 out_sub <- list(out[[1]][sequence, ], out[[2]][sequence, ],
                 out[[3]][sequence, ], out[[4]][sequence, ])
 
 # save samples
-saveRDS(out_sub, "samples/samples_spatio_timeranef_hmc_twoalpha_mu.rds")
+saveRDS(out_sub, "samples/samples_spatio_timeranef_rw_twoalpha.rds")
 
 stopCluster(cl)
 
