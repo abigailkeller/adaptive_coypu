@@ -1,10 +1,10 @@
 library(tidyverse)
 library(MCMCvis)
 
-samp <- readRDS("samples/samples_spatio_timeranef_rw_twoalpha.rds")
+samp <- readRDS("samples/samples_spatio_timeranef_rw_twoalpha_longer.rds")
 
-param1 <- "N[2, 4]"
-param2 <- "p_detect"
+param1 <- "s_s[1]"
+param2 <- "beta[1]"
 
 ggplot() +
   geom_point(aes(x = c(samp[[1]][, param1], samp[[2]][, param1],
@@ -15,7 +15,7 @@ ggplot() +
 
 summary <- MCMCsummary(samp)
 
-param <- "s_s[1]"
+param <- "beta[1]"
 
 ggplot() +
   geom_line(aes(x = 1:length(samp[[1]][, param]),
@@ -26,6 +26,17 @@ ggplot() +
                 y = samp[[3]][, param]), color = "yellow") +
   geom_line(aes(x = 1:length(samp[[1]][, param]),
                 y = samp[[4]][, param]), color = "green") +
+  labs(x = "iteration", y = param)
+
+ggplot() +
+  geom_line(aes(x = 1:length(samp2[[1]][, param]),
+                y = samp2[[1]][, param]), color = "blue") +
+  geom_line(aes(x = 1:length(samp2[[1]][, param]),
+                y = samp2[[2]][, param]), color = "purple") +
+  geom_line(aes(x = 1:length(samp2[[1]][, param]),
+                y = samp2[[3]][, param]), color = "yellow") +
+  geom_line(aes(x = 1:length(samp2[[1]][, param]),
+                y = samp2[[4]][, param]), color = "green") +
   labs(x = "iteration", y = param)
 
 alpha <- summary[151:155, "mean"]

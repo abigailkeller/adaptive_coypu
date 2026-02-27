@@ -1,3 +1,19 @@
+`samples_spatio_timeranef_rw_twoalpha_longer.rds`
+
+- like `samples_spatio_timeranef_hmc_twoalpha_long.rds` but just sampled even longer
+- ni = 2000000 * 25
+- nb = 50000 * 6
+- nc = 5
+- nt = 5000
+
+`samples_spatio_timeranef_rw_twoalpha_long.rds`
+
+- like `samples_spatio_timeranef_hmc_twoalpha.rds` but just sampled longer
+- ni = 2000000 * 12
+- nb = 50000 * 6
+- nc = 4
+- nt = 5000
+
 `samples_spatio_timeranef_rw_twoalpha.rds`
 
 - like `samples_spatio_timeranef_hmc_twoalpha_temp.rds` but just sampled longer with RW

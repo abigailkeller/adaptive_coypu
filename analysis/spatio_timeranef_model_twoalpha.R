@@ -206,10 +206,10 @@ inits <- function(){
   }
 
 # run model
-ni <- 2000000 * 4
-nb <- 50000 * 4
-nc <- 4
-nt <- 1000
+ni <- 2000000 * 25
+nb <- 50000 * 6
+nc <- 6
+nt <- 10000
 # ni <- 5000 * 4
 # nb <- 1000 * 4
 # nc <- 4
@@ -271,7 +271,7 @@ out_sub <- list(out[[1]][sequence, ], out[[2]][sequence, ],
                 out[[3]][sequence, ], out[[4]][sequence, ])
 
 # save samples
-saveRDS(out_sub, "samples/samples_spatio_timeranef_rw_twoalpha.rds")
+saveRDS(out_sub, "samples/samples_spatio_timeranef_rw_twoalpha_longer.rds")
 
 stopCluster(cl)
 
