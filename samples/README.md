@@ -1,9 +1,17 @@
+`samples_spatio_timeranef_rw_twoalpha_noint.rds`
+
+- removed beta intercept and made zero_mean = 0
+- ni = 2000000 * 12
+- nb = 50000 * 6
+- nc = 4
+- nt = 5000
+
 `samples_spatio_timeranef_rw_twoalpha_longer.rds`
 
 - like `samples_spatio_timeranef_hmc_twoalpha_long.rds` but just sampled even longer
 - ni = 2000000 * 25
 - nb = 50000 * 6
-- nc = 5
+- nc = 4
 - nt = 5000
 
 `samples_spatio_timeranef_rw_twoalpha_long.rds`

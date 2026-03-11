@@ -1,10 +1,12 @@
 library(tidyverse)
 library(MCMCvis)
+library(viridis)
 
-samp <- readRDS("samples/samples_spatio_timeranef_rw_twoalpha_longer.rds")
+samp <- readRDS("samples/samples_spatio_timeranef_rw_twoalpha_noint.rds")
 
-param1 <- "s_s[1]"
-param2 <- "beta[1]"
+param1 <- "N[7, 2]"
+param2 <- "N[7, 3]"
+param3 <- "sigma_s"
 
 ggplot() +
   geom_point(aes(x = c(samp[[1]][, param1], samp[[2]][, param1],
@@ -13,9 +15,19 @@ ggplot() +
                        samp[[3]][, param2], samp[[4]][, param2]))) +
   labs(x = param1, y = param2)
 
+ggplot() +
+  geom_point(aes(x = c(samp[[1]][, param1], samp[[2]][, param1],
+                       samp[[3]][, param1], samp[[4]][, param1]),
+                 y = c(samp[[1]][, param2], samp[[2]][, param2], 
+                       samp[[3]][, param2], samp[[4]][, param2]),
+                 color = c(samp[[1]][, param3], samp[[2]][, param3], 
+                           samp[[3]][, param3], samp[[4]][, param3]))) +
+  labs(x = param1, y = param2, color = param3) +
+  scale_color_viridis()
+
 summary <- MCMCsummary(samp)
 
-param <- "beta[1]"
+param <- "sigma_s"
 
 ggplot() +
   geom_line(aes(x = 1:length(samp[[1]][, param]),
@@ -54,3 +66,15 @@ ggplot() +
 ggplot() +
   geom_density(aes(x = 1 - exp(-exp(alpha))), fill = "blue", alpha = 0.6) +
   geom_density(aes(x = 1 - exp(-exp(runif(10000, -5, 0)))), alpha = 0.6)
+
+Ntime <- data.frame(
+  N = summary[1:135, "mean"],
+  t = rep(1:9, 15),
+  site = rep(1:15, each = 9)
+)
+
+ggplot() +
+  geom_line(data = Ntime,
+            aes(x = t, y = N, color = as.factor(site))) +
+  labs(x = "t", y = "N", color = "site")
+

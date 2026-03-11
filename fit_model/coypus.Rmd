@@ -1,0 +1,570 @@
+---
+title: "Estimating coypus abundance"
+author: "Olivier Gimenez"
+date: "Dec 2024, Apr 2025"
+output: 
+  html_document:
+    toc: TRUE
+    toc_depth: 2
+    number_sections: true
+    theme: united
+    highlight: tango
+    df_print: paged
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      cache = TRUE, 
+                      message = FALSE, 
+                      warning = FALSE, 
+                      dpi = 150, 
+                      fig.height=6, 
+                      fig.width = 1.777777*6)
+library(tidyverse)
+theme_set(theme_light())
+```
+
+# Motivation
+
+Here I illustrate the hierarchical structure of the multinomial N-mixture model, and demonstrate how to use covariates on the abundance and capture probabilities. I also illustrate how to deal with overdispersion by fitting a model with a negative binomial (instead of a Poisson) distribution for abundance. I use removal data on coypus in France. 
+
+First things first, load the packages we will need:
+```{r}
+library(sf)
+library(tidyverse)
+library(janitor)
+library(lubridate)
+library(nimble)
+library(ubms)
+library(MCMCvis)
+```
+
+# Get data
+
+Get some background maps with all departments (counties) of the Occitanie region:
+```{r}
+departements <- st_read("shp/departements-d-occitanie.shp")
+mask <- departements$nom_officie.2 == "HERAULT" 
+herault <- departements[mask, ]
+communes <- st_read("shp/georef-france-commune-millesime.shp")
+communes_herault <- communes %>% st_intersection(herault)
+```
+
+Visualize:
+```{r}
+ggplot() +
+  geom_sf(data = herault, color = "black", lwd = 1) +
+  geom_sf(data = communes_herault, lwd = .3, color = "black", fill = "white") + 
+  theme_void()
+```
+
+Select the cities where trapping occurred:
+```{r}
+noms_communes_piegeage <- c("BAILLARGUES",
+                            "CANDILLARGUES",
+                            "LA GRANDE-MOTTE",
+                            "LANSARGUES",
+                            "MARSILLARGUES",
+                            "MAUGUIO",
+                            "SAINT-NAZAIRE-DE-PÉZAN",
+                            "TEYRAN",
+                            "ENTRE-VIGNES", #"SAINT-CHRISTOL",
+                            "SAINT-AUNÈS",
+                            "VALERGUES",
+                            "SAINT-JUST",
+                            "SAINT-GENIÈS-DES-MOURGUES",
+                            "PÉROLS",
+                            "LUNEL-VIEL",
+                            "LUNEL",
+                            "SAINT-VINCENT-DE-BARBEYRARGUES")
+communes_piegeage <- communes_herault[communes_herault$com_name_up %in% noms_communes_piegeage,]
+```
+
+Visualize:
+```{r}
+ggplot() +
+  geom_sf(data = herault, color = "black", lwd = 1) +
+  geom_sf(data = communes_herault, lwd = .3, color = "black", fill = "white") + 
+  geom_sf(data = communes_piegeage, lwd = .3, fill = "pink") + 
+  theme_void()
+```
+
+Get coypus removal data:
+```{r}
+raw_dat <- readRDS("data/coypus.rds")
+raw_dat
+```
+
+Select the year 2022, months February, March and April, and plot number of coypus over cities where there were removal operations:
+```{r}
+plot_2024 <- raw_dat$removal_coypus %>%
+  # filter(commune %in% c("candillargues",
+  #                       "lansargues",
+  #                       "mauguio",
+  #                       "saint_nazaire_de_pezan",
+  #                       "saint_just",
+  #                       "valergues")) %>%
+  #filter(Month %in% c(2,3,4)) %>%
+  filter(Year %in% 2024) %>%
+  group_by(commune, Month) %>%
+  summarize(tot = sum(n)) %>%
+  ggplot() + 
+  geom_col(aes(as_factor(Month), tot)) +
+  facet_wrap(~commune) +
+  labs(y = "number of coypus removed", x = "month")
+```
+
+Format the data with months in columns: 
+```{r}
+dat <- raw_dat$removal_coypus %>%
+  filter(commune %in% c("candillargues",
+                        "lansargues",
+                        "mauguio",
+                        "saint_nazaire_de_pezan",
+                        "saint_just",
+                        "valergues")) %>%
+  filter(Month %in% c(2,3,4)) %>%
+  # mutate(Year = as_factor(Year)) %>%
+  pivot_wider(names_from = Month, 
+              values_from = n) %>%
+  filter(Year == 2022)
+dat
+```
+
+# Model fitting
+
+## Poisson distribution with `NIMBLE`
+
+Get constants and data ready:
+```{r}
+K <- nrow(dat) # nsites
+J <- ncol(dat[,-c(1,2)]) # nsurveys
+constants <- list(K = K, J = J) 
+data <- list(y = dat[,-c(1,2)],
+             n = apply(dat[,-c(1,2)], 1, sum),
+             temp = (raw_dat$temperature - mean(raw_dat$temperature))/sd(raw_dat$temperature))
+```
+
+Code of a model with temperature on abundance, and month on capture:
+```{r}
+# code
+code <- nimbleCode({
+  for (i in 1:K) { # loop over sites
+    
+    # prob of cells
+    pi[i,1] <- p[i,1] # survey 1
+    for(j in 2:J){ # loop over surveys > 1
+      pi[i,j] <- prod(1 - p[i, 1:(j-1)]) * p[i,j]
+    }
+    pcap[i] <- sum(pi[i,1:J])
+    
+    # capture prob
+    for(j in 1:J){ # loop over surveys
+      cloglog(p[i,j]) <- alpha[j]
+      pic[i,j] <- pi[i,j] / pcap[i]
+    }
+    
+    # likelihood: observation
+    y[i,1:J] ~ dmulti(pic[i,1:J], n[i]) # multinomial for each site
+    n[i] ~ dbin(pcap[i], N[i]) # for each site
+    # likelihood: process
+    N[i] ~ dpois(lambda[i]) # for each site
+    log(lambda[i]) <- beta[1] + beta[2] * temp[i]
+  } # end of loop over sites
+  
+  for (j in 1:J){
+    alpha[j] ~ dnorm(0, sd = 1.5)
+  }
+  for (k in 1:2){
+    beta[k] ~ dnorm(0, sd = 1.5)
+  }
+  
+  #---------------- check model goodness of fit
+  
+  for(i in 1:K){ 
+    ## replicate data set
+    n.pred[i] ~ dbin(pcap[i], N[i])
+    y.pred[i,1:J] ~ dmulti(pic[i,1:J], n.pred[i])
+    
+    ## Freeman–Tukey residuals: observation component
+    for(k in 1:J){ 
+      e1[i,k]      <- pic[i,k] * n[i] # expected counts (obs)
+      resid1[i,k]  <- pow(sqrt(y[i,k]) - sqrt(e1[i,k]), 2)
+      e1.pred[i,k] <- pic[i,k] * n.pred[i] # expected counts (rep)
+      resid1.pred[i,k] <- pow(sqrt(y.pred[i,k]) - sqrt(e1.pred[i,k]), 2)
+    }  
+    ## Freeman–Tukey residuals: abundance component
+    e2[i] <- pcap[i] * lambda[i] 
+    resid2[i] <- pow(sqrt(n[i]) - sqrt(e2[i]), 2) 
+    resid2.pred[i] <- pow(sqrt(n.pred[i]) - sqrt(e2[i]), 2) 
+  }  
+  
+  # fit statistic
+  fit1.data <- sum(resid1[1:K, 1:J])      # observation part (data)
+  fit1.pred <- sum(resid1.pred[1:K, 1:J]) # observation part (replicates)
+  fit2.data <- sum(resid2[1:K])           # abundance part (data)
+  fit2.pred <- sum(resid2.pred[1:K])      # abundance part (replicates)
+  
+})
+```
+
+Pick initial values:
+```{r}
+pic.init <- array(runif(K*J,0.05,0.15), c(K,J))
+pic.init <- pic.init / apply(pic.init, 1, sum)
+apply(pic.init, 1, sum)
+Nin <- apply(dat[,-c(1,2)], 1, sum) + 10
+inits <- function(){list(alpha = rep(0.1, J), 
+                         pic = pic.init, 
+                         beta = rep(0,2), 
+                         N = Nin)}
+```
+
+Set things up:
+```{r}
+# create Nimble model
+Rmodel <- nimbleModel(code = code, 
+                      constants = constants, 
+                      data = data, 
+                      inits = inits())
+Rmcmc <- compileNimble(Rmodel, showCompilerOutput = F)
+#ModSpec <- configureMCMC(Rmodel, onlyRW = TRUE) # RW sampling 
+#ModSpec <- configureMCMC(Rmodel) # Nimble picks the samplers
+ModSpec <- configureMCMC(Rmodel, onlySlice = TRUE) # slice sampling 
+ModSpec$resetMonitors()
+ModSpec$addMonitors(c("alpha","N","beta","fit1.data","fit1.pred","fit2.data","fit2.pred"))
+Cmcmc <- buildMCMC(ModSpec)
+Cmodel <- compileNimble(Cmcmc, project = Rmodel, resetFunctions = TRUE)
+```
+
+Run model:
+```{r}
+ni <- 50000*4
+nb <- 5000*4
+nc <- 2
+nt <- 15
+samp <- runMCMC(Cmodel, 
+                niter = ni, 
+                nburnin = nb, 
+                nchains = nc, 
+                thin = nt, 
+                inits = inits,  
+                samplesAsCodaMCMC = TRUE)
+```
+
+Get a summary of the results:
+```{r}
+MCMCsummary(samp, params=c("alpha","beta"))
+```
+
+Check convergence:
+```{r}
+MCMCtrace(samp, params = c("alpha","beta"), pdf = FALSE)
+```
+
+Post-process results:
+```{r}
+res <- rbind(samp$chain1, samp$chain2)
+```
+
+Capture probabilities:
+```{r}
+data.frame(
+  mois = c("february", "march", "april"), 
+  prob_capture = c(mean(icloglog(res[,'alpha[1]'])) * 100,
+                   mean(icloglog(res[,'alpha[2]'])) * 100,
+                   mean(icloglog(res[,'alpha[3]'])) * 100),
+  IClower = c(quantile(icloglog(res[,'alpha[1]']), probs = c(2.5)/100)* 100,
+                   quantile(icloglog(res[,'alpha[2]']), probs = c(2.5)/100)* 100,
+                   quantile(icloglog(res[,'alpha[3]']), probs = c(2.5)/100)* 100),
+  ICupper = c(quantile(icloglog(res[,'alpha[1]']), probs = c(97.5)/100)* 100,
+              quantile(icloglog(res[,'alpha[2]']), probs = c(97.5)/100)* 100,
+              quantile(icloglog(res[,'alpha[3]']), probs = c(97.5)/100)* 100))
+```
+
+
+Expected abundance:
+```{r}
+data.frame(cities = c("candillargues",
+                       "lansargues",
+                       "mauguio",
+                       "saint-nazaire-de-pézan",
+                       "saint-just",
+                       "valergues"),
+           estimated = paste0(round(apply(res[,1:6], 2, mean)), ' (', 
+                               round(apply(res[,1:6], 2, quantile, probs = c(2.5, 97.5)/100))[1,], ',',
+                               round(apply(res[,1:6], 2, quantile, probs = c(2.5, 97.5)/100))[2,], ')'),
+           removed = apply(dat[,-c(1,2)],1,sum), 
+           remaining = paste0(round(apply(res[,1:6], 2, mean) - apply(dat[,-c(1,2)],1,sum)), ' (', 
+                               round(apply(res[,1:6] - matrix(apply(dat[,-c(1,2)],1,sum), nrow = nrow(res[,1:6]), ncol = 6, byrow= T), 2, quantile, probs = c(2.5, 97.5)/100))[1,], ',',
+                               round(apply(res[,1:6] - matrix(apply(dat[,-c(1,2)],1,sum), nrow = nrow(res[,1:6]), ncol = 6, byrow= T), 2, quantile, probs = c(2.5, 97.5)/100))[2,], ')'))
+```
+
+Posterior densities of abundance:
+```{r}
+Nposterior <- res[,1:6] 
+colnames(Nposterior) <- c("candillargues",
+                       "lansargues",
+                       "mauguio",
+                       "saint-nazaire-de-pézan",
+                       "saint-just",
+                       "valergues")
+Nposterior %>%
+  as_tibble() %>%
+  mutate(id = row_number()) %>%
+  pivot_longer(!id, names_to = "cities", values_to = "mcmc") %>%
+  group_by(cities) %>%
+  mutate(moy = round(mean(mcmc))) %>%
+  mutate(lower = round(quantile(mcmc, probs = c(2.5)/100))) %>%
+  mutate(upper = round(quantile(mcmc, probs = c(97.5)/100))) %>%
+  ggplot(aes(mcmc)) +
+  geom_histogram(aes(x = mcmc, y = ..density..), bins = 20, color = "black", fill = "gray") +
+  geom_vline(aes(xintercept = moy), linetype = "dashed", size = 0.6) + 
+  geom_text(
+    aes(
+      x = moy, 
+      y = 0.02, 
+      label = paste0(moy, " (", lower, ", ", upper, ")")
+    ),
+    hjust = -0.1,  # Adjust horizontal position
+    vjust = -0.5,  # Adjust vertical position
+    size = 3,      # Adjust text size
+   # angle = 90     # Rotate the text vertically
+  ) +
+  facet_wrap(vars(cities), scales = "free_x") 
+
+ggsave("hist_coypus.png", width = 10, height = 6)
+```
+
+Assess model goodness-of-fit. Consider first the observation part of the model:
+```{r}
+mean(res[,'fit1.pred'] > res[,'fit1.data'])
+```
+
+Then the abundance part of the model:
+```{r}
+mean(res[,'fit2.pred'] > res[,'fit2.data'])
+```
+
+
+## Poisson distribution with `ubms`
+
+Get data ready:
+```{r}
+y <- as.matrix(dat[,-c(1,2)])
+
+site.covs <- data.frame(temp = raw_dat$temperature)
+
+time <- matrix(c('february','march','april'),
+               nrow = nrow(y),
+               ncol = ncol(y), 
+               byrow = TRUE)
+
+umf <- unmarkedFrameMPois(y = y, 
+                        siteCovs = site.covs,
+                        obsCovs = list(time = time),
+                        type = "removal")
+```
+
+Fit model:
+```{r}
+fit <- stan_multinomPois(~time ~scale(temp), # capture, abundance in that order
+                        data = umf, 
+                        chains = 2, 
+                        iter = 50000*4,
+                        warmup = 5000*4,
+                        thin = 15,
+                        prior_intercept_state = normal(0, 1.5),
+                        prior_coef_state = normal(0, 1.5))
+```
+
+Estimates for abundance parameters are similar to those we obtained with `NIMBLE`:
+```{r}
+fit
+```
+
+Check convergence:
+```{r}
+traceplot(fit, pars = c("beta_state", "beta_det"))
+```
+
+Get posterior densities:
+```{r}
+plot_posteriors(fit)
+```
+
+Estimated relationship for abundance vs temperature is similar to what we got with `NIMBLE`:
+```{r}
+plot_marginal(fit, submodel = "state")
+```
+
+Estimates for capture probabilities are similar to what we got with `NIMBLE`:
+```{r}
+plot_marginal(fit, submodel = "det")
+```
+
+## Overdispersion and negative binomial distribution with `NIMBLE`
+
+We fit the same model as in the previous section, and use a negative binomial distribution instead of a Poisson distribution: 
+```{r}
+code <- nimbleCode({
+  for (i in 1:K) { # loop over sites
+    
+    # prob of cells
+    pi[i,1] <- p[i,1] # survey 1
+    for(j in 2:J){ # loop over surveys > 1
+      pi[i,j] <- prod(1 - p[i,1:(j-1)]) * p[i,j]
+    }
+    pcap[i] <- sum(pi[i,1:J])
+    
+    # capture prob fn of effort
+    for(j in 1:J){ # loop over surveys
+      cloglog(p[i,j]) <- alpha[j] 
+      pic[i,j] <- pi[i,j] / pcap[i]
+    }
+    
+    # likelihood: observation
+    y[i,1:J] ~ dmulti(pic[i,1:J], n[i]) # multinomial for each site
+    n[i] ~ dbin(pcap[i], N[i]) # for each site
+    # likelihood: process
+    N[i] ~ dnegbin(pp[i], r)
+    pp[i] <- r / (r + lambda[i]) 
+    log(lambda[i]) <- beta[1] + beta[2] * temp[i]
+  } # end of loop over sites
+  
+  r ~ dunif(0.01,50)
+  
+  for (j in 1:J){
+    alpha[j] ~ dnorm(0, sd = 1.5)
+  }
+  for (k in 1:2){
+    beta[k] ~ dnorm(0, sd = 1.5)
+  }
+  
+  #---------------- check model goodness of fit
+  
+  for(i in 1:K){ 
+    ## replicate data set
+    n.pred[i] ~ dbin(pcap[i], N[i])
+    y.pred[i,1:J] ~ dmulti(pic[i,1:J], n.pred[i])
+    
+    ## Freeman–Tukey residuals: observation component
+    for(k in 1:J){ 
+      e1[i,k]      <- pic[i,k] * n[i] # expected counts (obs)
+      resid1[i,k]  <- pow(sqrt(y[i,k]) - sqrt(e1[i,k]), 2)
+      e1.pred[i,k] <- pic[i,k] * n.pred[i] # expected counts (rep)
+      resid1.pred[i,k] <- pow(sqrt(y.pred[i,k]) - sqrt(e1.pred[i,k]), 2)
+    }  
+    ## Freeman–Tukey residuals: abundance component
+    e2[i] <- pcap[i] * lambda[i] 
+    resid2[i] <- pow(sqrt(n[i]) - sqrt(e2[i]), 2) 
+    resid2.pred[i] <- pow(sqrt(n.pred[i]) - sqrt(e2[i]), 2) 
+  }  
+  # fit statistic
+  fit1.data <- sum(resid1[1:K, 1:J])      # observation part (data)
+  fit1.pred <- sum(resid1.pred[1:K, 1:J]) # observation part (replicates)
+
+  fit2.data <- sum(resid2[1:K])           # abundance part (data)
+  fit2.pred <- sum(resid2.pred[1:K])      # abundance part (replicates)
+
+})
+
+pic.init <- array(runif(K*J,0.05,0.15), c(K,J))
+pic.init <- pic.init / apply(pic.init, 1, sum)
+apply(pic.init, 1, sum)
+Nin <- apply(dat[,-c(1,2)], 1, sum) + 10
+inits <- function(){list(alpha = rep(0.1, J), 
+                         pic = pic.init, 
+                         beta = rep(0,2), 
+                         N = Nin)}
+
+Rmodel <- nimbleModel(code = code, 
+                      constants = constants, 
+                      data = data, 
+                      inits = inits())
+Rmcmc <- compileNimble(Rmodel, showCompilerOutput = F)
+#ModSpec <- configureMCMC(Rmodel, onlyRW = TRUE) # RW sampling 
+#ModSpec <- configureMCMC(Rmodel) # Nimble picks the samplers
+ModSpec <- configureMCMC(Rmodel, onlySlice = TRUE) # slice sampling 
+ModSpec$resetMonitors()
+ModSpec$addMonitors(c("alpha","N","beta","r","fit1.data","fit1.pred","fit2.data","fit2.pred"))
+Cmcmc <- buildMCMC(ModSpec)
+Cmodel <- compileNimble(Cmcmc, project = Rmodel, resetFunctions = TRUE)
+
+ni <- 50000*4
+nb <- 5000*4
+nc <- 2
+nt <- 15
+
+samp <- runMCMC(Cmodel, 
+                niter = ni, 
+                nburnin = nb, 
+                nchains = nc, 
+                thin = nt, 
+                inits = inits,  
+                samplesAsCodaMCMC = TRUE)
+```
+
+```{r}
+MCMCsummary(samp, params=c("alpha","beta", "r"))
+```
+
+
+```{r}
+MCMCtrace(samp, params = c("alpha","beta", "r"), pdf = FALSE)
+```
+
+```{r}
+res <- rbind(samp$chain1, samp$chain2)
+```
+
+
+Capture probabilities:
+```{r}
+data.frame(
+  mois = c("february", "march", "april"), 
+  prob_capture = c(mean(icloglog(res[,'alpha[1]'])) * 100,
+                   mean(icloglog(res[,'alpha[2]'])) * 100,
+                   mean(icloglog(res[,'alpha[3]'])) * 100),
+  IClower = c(quantile(icloglog(res[,'alpha[1]']), probs = c(2.5)/100)* 100,
+              quantile(icloglog(res[,'alpha[2]']), probs = c(2.5)/100)* 100,
+              quantile(icloglog(res[,'alpha[3]']), probs = c(2.5)/100)* 100),
+  ICupper = c(quantile(icloglog(res[,'alpha[1]']), probs = c(97.5)/100)* 100,
+              quantile(icloglog(res[,'alpha[2]']), probs = c(97.5)/100)* 100,
+              quantile(icloglog(res[,'alpha[3]']), probs = c(97.5)/100)* 100))
+```
+
+Estimated abundance:
+```{r}
+data.frame(cities = c("candillargues",
+                       "lansargues",
+                       "mauguio",
+                       "saint-nazaire-de-pézan",
+                       "saint-just",
+                       "valergues"),
+           estimated = paste0(round(apply(res[,1:6], 2, mean)), ' (', 
+                               round(apply(res[,1:6], 2, quantile, probs = c(2.5, 97.5)/100))[1,], ',',
+                               round(apply(res[,1:6], 2, quantile, probs = c(2.5, 97.5)/100))[2,], ')'),
+           removed = apply(dat[,-c(1,2)],1,sum), 
+           remaining = paste0(round(apply(res[,1:6], 2, mean) - apply(dat[,-c(1,2)],1,sum)), ' (', 
+                               round(apply(res[,1:6] - matrix(apply(dat[,-c(1,2)],1,sum), nrow = nrow(res[,1:6]), ncol = 6, byrow= T), 2, quantile, probs = c(2.5, 97.5)/100))[1,], ',',
+                               round(apply(res[,1:6] - matrix(apply(dat[,-c(1,2)],1,sum), nrow = nrow(res[,1:6]), ncol = 6, byrow= T), 2, quantile, probs = c(2.5, 97.5)/100))[2,], ')'))
+```
+
+Assess model goodness-of-fit. Consider first the observation part of the model:
+```{r}
+mean(res[,'fit1.pred'] > res[,'fit1.data'])
+```
+
+Then the abundance part of the model:
+```{r}
+mean(res[,'fit2.pred'] > res[,'fit2.data'])
+```
+
+# Session info
+
+```{r}
+sessionInfo()
+```
+
