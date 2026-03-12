@@ -2,7 +2,7 @@ library(tidyverse)
 library(MCMCvis)
 library(viridis)
 
-samp <- readRDS("samples/samples_spillover_timeranef_rw_twoalpha.rds")
+samp <- readRDS("samples/samples_spillover_timeranef_rw_twoalpha_stparam.rds")
 
 param1 <- "gamma"
 param2 <- "rho"

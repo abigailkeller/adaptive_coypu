@@ -295,7 +295,7 @@ out_sub <- list(out[[1]][sequence, ], out[[2]][sequence, ],
                 out[[3]][sequence, ], out[[4]][sequence, ])
 
 # save samples
-saveRDS(out_sub, "samples/samples_spillover_timeranef_rw_twoalpha_plus1.rds")
+saveRDS(out_sub, "samples/samples_spillover_timeranef_rw_twoalpha.rds")
 
 stopCluster(cl)
 
