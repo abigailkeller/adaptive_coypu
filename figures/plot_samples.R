@@ -2,11 +2,11 @@ library(tidyverse)
 library(MCMCvis)
 library(viridis)
 
-samp <- readRDS("samples/samples_spatio_timeranef_rw_twoalpha_noint.rds")
+samp <- readRDS("samples/samples_spillover_timeranef_rw_twoalpha.rds")
 
-param1 <- "N[7, 2]"
-param2 <- "N[7, 3]"
-param3 <- "sigma_s"
+param1 <- "gamma"
+param2 <- "rho"
+param3 <- "beta"
 
 ggplot() +
   geom_point(aes(x = c(samp[[1]][, param1], samp[[2]][, param1],
@@ -25,9 +25,16 @@ ggplot() +
   labs(x = param1, y = param2, color = param3) +
   scale_color_viridis()
 
-summary <- MCMCsummary(samp)
+sum <- c(samp[[1]][, param1], samp[[2]][, param1],
+         samp[[3]][, param1], samp[[4]][, param1]) +
+  c(samp[[1]][, param2], samp[[2]][, param2],
+    samp[[3]][, param2], samp[[4]][, param2]) +
+  c(samp[[1]][, param3], samp[[2]][, param3], 
+    samp[[3]][, param3], samp[[4]][, param3])
 
-param <- "sigma_s"
+fsummary <- MCMCsummary(samp)
+
+param <- "rho"
 
 ggplot() +
   geom_line(aes(x = 1:length(samp[[1]][, param]),
@@ -67,6 +74,8 @@ ggplot() +
   geom_density(aes(x = 1 - exp(-exp(alpha))), fill = "blue", alpha = 0.6) +
   geom_density(aes(x = 1 - exp(-exp(runif(10000, -5, 0)))), alpha = 0.6)
 
+
+
 Ntime <- data.frame(
   N = summary[1:135, "mean"],
   t = rep(1:9, 15),
@@ -78,3 +87,23 @@ ggplot() +
             aes(x = t, y = N, color = as.factor(site))) +
   labs(x = "t", y = "N", color = "site")
 
+index_low <- which.min(samp[[1]][, "sigma_s"])
+index_high <- which.max(samp[[1]][, "sigma_s"])
+
+N_low <- samp[[1]][index_low, 1:135]
+N_high <- samp[[1]][index_high, 1:135]
+N_low_wide <- N_low[1:9]
+N_high_wide <- N_high[1:9]
+for (i in 2:15) {
+  low <- (i - 1) * 9 + 1
+  high <- i * 9
+  N_low_wide <- cbind(N_low_wide, N_low[low:high])
+  N_high_wide <- cbind(N_high_wide, N_high[low:high])
+}
+rownames(N_low_wide) <- NULL
+rownames(N_high_wide) <- NULL
+colnames(N_low_wide) <- NULL
+colnames(N_high_wide) <- NULL
+
+hist(colMeans(N_low_wide))
+hist(colMeans(N_high_wide))

@@ -119,7 +119,7 @@ model_code <- nimbleCode({
       n[t, i] ~ dbin(pcap[t, i], N[t, i]) # for each site
       # likelihood: process
       N[t, i] ~ dpois(lambda[t, i]) # for each site
-      log(lambda[t, i]) <- beta * temp[t, i] + s_s[i] + s_t[t]
+      # log(lambda[t, i]) <- beta * temp[t, i] + s_s[i] + s_t[t]
       
       # capture prob
       for (j in 1:J) {
@@ -138,7 +138,11 @@ model_code <- nimbleCode({
     
     for (t in 2:M) {
       
-      log(lambda[t, i]) <- beta * temp[t, i] + s_s[i] + s_t[t] + lambda[t - 1, i]
+      remaining[t - 1, i] <- N[t - 1, i] - n[t - 1, i]
+      
+      log(lambda[t, i]) <- (
+        beta * temp[t, i] + s_s[i] + s_t[t] + log(remaining[t - 1, i])
+      )
         
     }
   }
@@ -202,7 +206,7 @@ for (i in 1:M) {
   pic.init[i, , ] <- temp / apply(temp, 1, sum)
 }
 #apply(pic.init, 1, sum)
-Nin <- n + 10
+Nin <- n + 50
 inits <- function(){
   list(p_detect = runif(1, 0, 1), 
        p_sample = runif(1, 0, 1), 
@@ -212,7 +216,7 @@ inits <- function(){
        N = Nin,
        sigma_s = 1, 
        s_s = rnorm(K),
-       s_t = rnorm(M))
+       s_t = c(0, rowMeans(Nin)[2:9] - rowMeans(Nin)[1:8]))
   }
 
 # run model
@@ -281,7 +285,7 @@ out_sub <- list(out[[1]][sequence, ], out[[2]][sequence, ],
                 out[[3]][sequence, ], out[[4]][sequence, ])
 
 # save samples
-saveRDS(out_sub, "samples/samples_spatio_timeranef_rw_twoalpha_noint.rds")
+saveRDS(out_sub, "samples/samples_spatio_timeranef_trans_rw_twoalpha_noint.rds")
 
 stopCluster(cl)
 

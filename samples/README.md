@@ -1,3 +1,19 @@
+`samples_spillover_timeranef_rw_twoalpha.rds`
+
+- spillover, with temp
+- ni = 2000000
+- nb = 50000
+- nc = 4
+- nt = 500
+
+`samples_spillover_timeranef_rw_twoalpha_notemp.rds`
+
+- spillover, without temperature covariate
+- ni = 2000000
+- nb = 50000
+- nc = 4
+- nt = 500
+
 `samples_spatio_timeranef_rw_twoalpha_noint.rds`
 
 - removed beta intercept and made zero_mean = 0
