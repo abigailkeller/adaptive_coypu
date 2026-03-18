@@ -2,7 +2,7 @@ library(tidyverse)
 library(MCMCvis)
 library(viridis)
 
-samp <- readRDS("samples/samples_spillover_timeranef_rw_twoalpha_stparam.rds")
+samp <- readRDS("samples/samples_spillover_timeranef_ranef_unif.rds")
 
 param1 <- "gamma"
 param2 <- "rho"
@@ -34,7 +34,7 @@ sum <- c(samp[[1]][, param1], samp[[2]][, param1],
 
 fsummary <- MCMCsummary(samp)
 
-param <- "rho"
+param <- "gamma"
 
 ggplot() +
   geom_line(aes(x = 1:length(samp[[1]][, param]),

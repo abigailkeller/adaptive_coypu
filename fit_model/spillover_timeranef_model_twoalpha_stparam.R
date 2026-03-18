@@ -162,6 +162,7 @@ model_code <- nimbleCode({
       )
         
     }
+    
   }
   
   for (i in 1:K) { # loop over sites
@@ -186,9 +187,9 @@ model_code <- nimbleCode({
   p_detect ~ dunif(0, 1)
   p_sample ~ dunif(0, 1)
   
-  beta ~ dnorm(0, sd = 1.5)
-  rho ~ dnorm(0, sd = 10)
-  gamma ~ dnorm(0, sd = 10)
+  beta ~ dunif(-10, 10)
+  rho ~ dunif(-10, 10)
+  gamma ~ dunif(-10, 10)
   
   st_mean ~ dunif(-10, 10)
   st_sd ~ dunif(0, 10)
@@ -270,8 +271,9 @@ out <- clusterEvalQ(cl, {
   
   # build the MCMC
   ModSpec <- configureMCMC(Rmodel, 
-                           monitors = c("p_sample", "p_detect", "sampled",
-                                        "N", "beta", "rho", "gamma", "sigma_s",
+                           monitors = c("p_sample", "p_detect",
+                                        "N", "beta", "rho", "gamma", 
+                                        "sigma_s",
                                         "s_s", "s_t", "st_mean", "st_sd")
   )
   
@@ -300,7 +302,7 @@ out_sub <- list(out[[1]][sequence, ], out[[2]][sequence, ],
                 out[[3]][sequence, ], out[[4]][sequence, ])
 
 # save samples
-saveRDS(out_sub, "samples/samples_spillover_timeranef_rw_twoalpha_stparam.rds")
+saveRDS(out_sub, "samples/samples_spillover_timeranef_rw_twoalpha_unif.rds")
 
 stopCluster(cl)
 

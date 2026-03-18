@@ -1,3 +1,11 @@
+`samples_spillover_timeranef_rw_twoalpha_unif.rds`
+
+- spillover, with temp, updated all priors to be uniform
+- ni = 2000000
+- nb = 50000
+- nc = 4
+- nt = 500
+
 `samples_spillover_timeranef_rw_twoalpha.rds`
 
 - spillover, with temp
