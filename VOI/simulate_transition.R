@@ -3,94 +3,143 @@ library(sp)
 library(spdep)
 library(tidyverse)
 
-# read samples
-samp <- readRDS("samples/samples_spatio_timeranef_rw_twoalpha_noint.rds")
-
-get_transition <- function(params, N, a_loc, a_adj, 
-                           nsites, adj, num, weights) {
+# transition function
+get_transition <- function(params, N, neighbors, temp_data,
+                           n_sites, n_visits, p_increase, site_increase) {
+  
+  ##########################
+  # get annual temperature #
+  ##########################
+  
+  # get landscape mean
+  mean_temp <- rnorm(1, temp_data$landscape_mean, temp_data$landscape_sd)
+  
+  # get site-level z_score and temp
+  z_score <- rep(NA, n_sites)
+  for (i in 1:n_sites) {
+    z_score[i] <- rnorm(1, temp_data$mean_z_score[i], temp_data$sd_z_score[i])
+  }
+  temp <- mean_temp + z_score * temp_data$sd
   
   
+  ################################
+  # get probability of detection #
+  ################################
+  
+  p <- matrix(params["p_detect"], nrow = n_sites, ncol = n_visits)
+  p[site_increase, ] <- params["p_detect"] * p_increase
+  
+  # get annual probability of capture
+  pi <- matrix(NA, nrow = n_sites, ncol = n_visits)
+  pcap <- rep(NA, n_sites)
+  n <- rep(NA, n_sites)
+  
+  pi[, 1] <- p[, 1] # survey 1
+  for (i in 1:n_sites) { # loop over sites
+    
+    # prob of cells
+      for (j in 2:n_visits) { # loop over surveys > 1
+        pi[i, j] <- prod(1 - p[i, 1:(j - 1)]) * p[i, j] 
+      }
+    pcap[i] <- sum(pi[i, ])
+    
+    # removal
+    n[i] <- rbinom(1, round(N[i]), pcap[i])
+  } 
+  
+  
+  # remaining after removal
+  remaining <- round(N) - n
+  
+  # get the mean of neighbors
+  neighbors_rem <- rep(NA, n_sites)
+  for (i in 1:n_sites) {
+    neighbors_rem[i] <- mean(remaining[neighbors[[i]]])
+  }
+  
+  # draw s_t
+  s_t <- rnorm(1, params["st_mean"], sd = params["st_sd"])
+  
+  # advance to next year
+  lambda_next <- (
+    params["beta"] * temp + s_t + 
+      params["rho"] * log(remaining + 1) +
+      params["gamma"] * log(neighbors_rem + 1)
+  )
+  
+  # get nextN
+  nextN <- rep(NA, n_sites)
+  for (i in 1:n_sites) {
+    nextN[i] <- rpois(1, exp(lambda_next[i]))
+  }
+  
+  return(nextN)
   
 }
 
-#################################################### 
-# get spatial random effect neighborhood structure #
-####################################################
+# read samples
+samp <- do.call(rbind,
+                readRDS("samples/samples_spillover_timeranef_rw_twoalpha_unif.rds"))
 
-# import data
-raw_dat <- readRDS("data/coypus.rds")
+# read in simulation data
+neighbors <- readRDS("data/simulation/neighbors.rds")
+temp_data <- readRDS("data/simulation/temp_data.rds")
+
+# get Nstart
+Nstart <- colMeans(samp[, 1:15 * 9])
+
+# get indices
+index_min <- which.min(samp[, "gamma"])
+index_max <- which.max(samp[, "gamma"])
+
+# simulate 10 years of min index
+N_sim_min <- matrix(NA, nrow = 11, ncol = 15)
+N_sim_min[1, ] <- Nstart
+for (t in 1:10) {
+  N_sim_min[t + 1, ] <- get_transition(params = samp[index_min,], 
+                                       N = N_sim_min[t, ], 
+                                       neighbors = neighbors, 
+                                       temp_data = temp_data, 
+                                       n_sites = 15, n_visits = 8,
+                                       p_increase = 2, site_increase = c(4, 13))
+}
+
+# simulate 10 years of max index
+N_sim_max <- matrix(NA, nrow = 11, ncol = 15)
+N_sim_max[1, ] <- Nstart
+for (t in 1:10) {
+  N_sim_max[t + 1, ] <- get_transition(params = samp[index_max,], 
+                                       N = N_sim_max[t, ], 
+                                       neighbors = neighbors, 
+                                       temp_data = temp_data, 
+                                       n_sites = 15, n_visits = 8,
+                                       p_increase = 2, site_increase = c(4, 13))
+}
+
+
+########
+# plot #
+########
+
+# read in commune shapefile
 temperature <- readRDS("data/temp/temperature.rds")
 communes_shp <- st_read("data/communes_shp/communes.shp")
 
 # reorder communes
 communes_shp <- communes_shp[match(temperature$commune, communes_shp$dpts_cl), ]
 
-# create df of commune names to join with temp
-commune_convert <- data.frame(
-  temp_name = temperature$commune,
-  dat_name = c("baillargues", "candillargues", "entre_vignes", 
-               "la_grande_motte", "lansargues", "lunel", "lunel_viel",
-               "marsillargues", "mauguio", "perols", 
-               "saint_genies_des_mourgues", "saint_just",
-               "saint_nazaire_de_pezan", "saint_vincent_de_barbeyrargues",
-               "valergues")
-)
+# add Nstart to commune data
+communes_shp <- cbind(communes_shp, Nstart)
 
-# get neighborhood structure
-nb <- poly2nb(communes_shp)
-nbInfo <- nb2WB(nb)
+ggplot(data = communes_shp) +
+  geom_sf(aes(fill = Nstart)) +
+  labs(fill = "N") +
+  theme_minimal()
 
-# adjust island
-## add to baillargues
-nbInfo$num[1] <- 2
-nbInfo$adj <- c(14, nbInfo$adj)
-## add to st vincent de barbeyrargues
-nbInfo$num[14] <- 1
-nbInfo$adj <- c(nbInfo$adj[1:sum(nbInfo$num[1:13])], 1, 
-                nbInfo$adj[(length(nbInfo$adj) - 
-                              nbInfo$num[15] + 1):length(nbInfo$adj)])
-## adjust weights
-nbInfo$weights <- rep(1, length(nbInfo$adj))
-
-N <- 15
-adj <- nbInfo$adj
-num <- nbInfo$num
-weights <- nbInfo$weights
-
-# Create an empty Adjacency Matrix (W)
-W <- matrix(0, nrow = N, ncol = N)
-pos <- 1
-for(i in 1:N) {
-  W[i, adj[pos:(pos + num[i] - 1)]] <- weights[pos:(pos + num[i] - 1)]
-  pos <- pos + num[i]
-}
-
-# Create the Diagonal Matrix (D)
-D <- diag(num)
-
-simulate_car <- function(W, D, tau = 1, alpha = 0.99) {
-  # Precision Matrix: Q = tau * (D - alpha * W)
-  # alpha < 1 ensures the matrix is invertible (Proper CAR)
-  Q <- tau * (D - alpha * W)
-  
-  # Covariance Matrix is the inverse of Precision
-  Sigma <- solve(Q)
-  
-  # Simulate from Multivariate Normal
-  return(mvrnorm(n = 1, mu = rep(0, nrow(W)), Sigma = Sigma))
-}
-
-tau_posterior <- 1 / c(samp[[1]][, "sigma_s"], samp[[2]][, "sigma_s"],
-                       samp[[3]][, "sigma_s"], samp[[4]][, "sigma_s"]) ^ 2
-
-# Run simulation
-spatial_effects <- data.frame(
-  min = simulate_car(W, D, tau = min(tau_posterior), alpha = 0.99),
-  max = simulate_car(W, D, tau = max(tau_posterior), alpha = 0.99)
-)
-
-# add spatial effects to commune data
-communes_shp <- cbind(communes_shp, spatial_effects)
+ggplot(data = communes_shp) +
+  geom_sf(aes(fill = dpts_cl)) +
+  labs(fill = "Commune") +
+  theme_minimal()
 
 ggplot(data = communes_shp) +
   geom_sf(aes(fill = max)) +
@@ -98,10 +147,8 @@ ggplot(data = communes_shp) +
   ggtitle(paste0("tau = ", round(max(tau_posterior), 3))) +
   theme_minimal()
 
-ggplot(data = communes_shp) +
-  geom_sf(aes(fill = min)) +
-  labs(fill = "Commune") +
-  ggtitle(paste0("tau = ", round(min(tau_posterior), 3))) +
+ggplot(data = samp) +
+  geom_point(aes(x = gamma, y = rho)) +
   theme_minimal()
 
 

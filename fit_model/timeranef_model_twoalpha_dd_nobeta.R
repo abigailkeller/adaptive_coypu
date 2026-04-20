@@ -103,13 +103,10 @@ M <- dim(dat_st)[1] # nyears
 constants <- list(K = K, J = J, M = M,
                   L_s = length(nbInfo$adj), 
                   adj_s = nbInfo$adj, weights_s = nbInfo$weights, 
-                  num_s = nbInfo$num, neighbors = neighbors,
-                  max_neighbors = ncol(neighbors)) 
+                  num_s = nbInfo$num) 
 data <- list(
   y = dat_st,
-  n = n,
-  temp = (temp_mat - mean(temp_mat)) / 
-               sd(temp_mat)
+  n = n
   )
 
 # model code
@@ -143,25 +140,22 @@ model_code <- nimbleCode({
   # temporal relationship
   for (i in 1:K) {
     
-    log(lambda[1, i]) <- beta * temp[1, i] + s_s[i] + s_t[1]
+    log(lambda[1, i]) <- s_s[i] + s_t[1]
     
     for (t in 2:M) {
       
       # remaining after removal
       remaining[t - 1, i] <- N[t - 1, i] - n[t - 1, i]
       
-      # get the mean of neighbors at t - 1
-      neighbors_rem[t - 1, i] <- get_mean(remaining[t - 1, 1:K], 
-                                          neighbors[i, 1:max_neighbors], 
-                                          num_s[i])
-      
       log(lambda[t, i]) <- (
-        beta * temp[t, i] + s_t[t] + 
-          log(exp(rho) * remaining[t - 1, i] + 1 +
-                exp(gamma) * neighbors_rem[t - 1, i])
+        s_t[t] + 
+          log(rho * remaining[t - 1, i] * 
+                (1 - remaining[t - 1, i] / exp(dd[i])) + 1)
       )
         
     }
+    
+    dd[i] ~ dnorm(dd_mean, sd = dd_sd)
     
   }
   
@@ -187,12 +181,13 @@ model_code <- nimbleCode({
   p_detect ~ dunif(0, 1)
   p_sample ~ dunif(0, 1)
   
-  beta ~ dunif(-10, 10)
-  rho ~ dunif(-10, 10)
-  gamma ~ dunif(-10, 10)
+  rho ~ dunif(0, 1000)
   
   st_mean ~ dunif(-10, 10)
   st_sd ~ dunif(0, 10)
+  
+  dd_mean ~ dunif(-100, 100)
+  dd_sd ~ dunif(0, 1000)
   
 })
 
@@ -209,11 +204,12 @@ inits <- function(){
        p_sample = runif(1, 0, 1), 
        sampled = array(1, dim(dat_st)),
        pic = pic.init, 
-       beta = 0, 
-       rho = 0,
-       gamma = 0,
+       rho = 1,
        st_mean = 1,
        st_sd = 1,
+       dd_mean = log(100),
+       dd_sd = 10,
+       dd = log(runif(K, 500, 1000)),
        N = Nin,
        sigma_s = 1, 
        s_s = rnorm(K),
@@ -222,10 +218,10 @@ inits <- function(){
   }
 
 # run model
-ni <- 2000000
-nb <- 50000
+ni <- 10000000
+nb <- 200000
 nc <- 4
-nt <- 500
+nt <- 3000
 # ni <- 5000 * 4
 # nb <- 1000 * 4
 # nc <- 4
@@ -244,22 +240,6 @@ out <- clusterEvalQ(cl, {
   library(nimble)
   library(coda)
   
-  get_mean <- nimbleFunction(
-    run = function(remaining = double(1), neighbors = double(1), 
-                   num_s = double(0)) {
-      
-      sum <- 0
-      for (i in 1:num_s) {
-        sum <- sum + remaining[neighbors[i]]
-      }
-      
-      mean <- sum / num_s
-      
-      return(mean) 
-      returnType(double(0))
-    }
-  )
-  
   # create Nimble model
   Rmodel <- nimbleModel(code = model_code, 
                         constants = constants, 
@@ -272,8 +252,8 @@ out <- clusterEvalQ(cl, {
   # build the MCMC
   ModSpec <- configureMCMC(Rmodel, 
                            monitors = c("p_sample", "p_detect",
-                                        "N", "beta", "rho", "gamma", 
-                                        "sigma_s",
+                                        "N", "rho",  
+                                        "sigma_s", "dd", "dd_mean", "dd_sd",
                                         "s_s", "s_t", "st_mean", "st_sd")
   )
   
@@ -302,7 +282,7 @@ out_sub <- list(out[[1]][sequence, ], out[[2]][sequence, ],
                 out[[3]][sequence, ], out[[4]][sequence, ])
 
 # save samples
-saveRDS(out_sub, "samples/samples_spillover_timeranef_rw_twoalpha_logcomb.rds")
+saveRDS(out_sub, "samples/samples_timeranef_rw_twoalpha_dd_nobeta.rds")
 
 stopCluster(cl)
 

@@ -1,3 +1,11 @@
+`samples_timeranef_rw_twoalpha_dd_nobeta.rds`
+
+- no spillover, density-dependence, no temperature covariate
+
+`samples_timeranef_rw_twoalpha_dd.rds`
+
+- no spillover, density-dependence
+
 `samples_spillover_timeranef_rw_twoalpha_unif.rds`
 
 - spillover, with temp, updated all priors to be uniform

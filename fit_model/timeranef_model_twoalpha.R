@@ -103,8 +103,7 @@ M <- dim(dat_st)[1] # nyears
 constants <- list(K = K, J = J, M = M,
                   L_s = length(nbInfo$adj), 
                   adj_s = nbInfo$adj, weights_s = nbInfo$weights, 
-                  num_s = nbInfo$num, neighbors = neighbors,
-                  max_neighbors = ncol(neighbors)) 
+                  num_s = nbInfo$num) 
 data <- list(
   y = dat_st,
   n = n,
@@ -150,15 +149,9 @@ model_code <- nimbleCode({
       # remaining after removal
       remaining[t - 1, i] <- N[t - 1, i] - n[t - 1, i]
       
-      # get the mean of neighbors at t - 1
-      neighbors_rem[t - 1, i] <- get_mean(remaining[t - 1, 1:K], 
-                                          neighbors[i, 1:max_neighbors], 
-                                          num_s[i])
-      
       log(lambda[t, i]) <- (
         beta * temp[t, i] + s_t[t] + 
-          log(exp(rho) * remaining[t - 1, i] + 1 +
-                exp(gamma) * neighbors_rem[t - 1, i])
+          log(rho * remaining[t - 1, i] + 1)
       )
         
     }
@@ -188,8 +181,7 @@ model_code <- nimbleCode({
   p_sample ~ dunif(0, 1)
   
   beta ~ dunif(-10, 10)
-  rho ~ dunif(-10, 10)
-  gamma ~ dunif(-10, 10)
+  rho ~ dunif(0, 1000)
   
   st_mean ~ dunif(-10, 10)
   st_sd ~ dunif(0, 10)
@@ -210,8 +202,7 @@ inits <- function(){
        sampled = array(1, dim(dat_st)),
        pic = pic.init, 
        beta = 0, 
-       rho = 0,
-       gamma = 0,
+       rho = 1,
        st_mean = 1,
        st_sd = 1,
        N = Nin,
@@ -244,22 +235,6 @@ out <- clusterEvalQ(cl, {
   library(nimble)
   library(coda)
   
-  get_mean <- nimbleFunction(
-    run = function(remaining = double(1), neighbors = double(1), 
-                   num_s = double(0)) {
-      
-      sum <- 0
-      for (i in 1:num_s) {
-        sum <- sum + remaining[neighbors[i]]
-      }
-      
-      mean <- sum / num_s
-      
-      return(mean) 
-      returnType(double(0))
-    }
-  )
-  
   # create Nimble model
   Rmodel <- nimbleModel(code = model_code, 
                         constants = constants, 
@@ -272,7 +247,7 @@ out <- clusterEvalQ(cl, {
   # build the MCMC
   ModSpec <- configureMCMC(Rmodel, 
                            monitors = c("p_sample", "p_detect",
-                                        "N", "beta", "rho", "gamma", 
+                                        "N", "beta", "rho",  
                                         "sigma_s",
                                         "s_s", "s_t", "st_mean", "st_sd")
   )
@@ -302,7 +277,7 @@ out_sub <- list(out[[1]][sequence, ], out[[2]][sequence, ],
                 out[[3]][sequence, ], out[[4]][sequence, ])
 
 # save samples
-saveRDS(out_sub, "samples/samples_spillover_timeranef_rw_twoalpha_logcomb.rds")
+saveRDS(out_sub, "samples/samples_timeranef_rw_twoalpha.rds")
 
 stopCluster(cl)
 

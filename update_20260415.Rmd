@@ -1,0 +1,45 @@
+---
+output: pdf_document
+---
+
+```{r, echo=FALSE, out.width="80%", fig.align="center"}
+knitr::include_graphics("figures/spatial_2022.png")
+```
+
+$$
+R_{t-1,i} = N_{t-1, i} - n_{t-1,i}
+$$
+$$
+A_{t-1,i} = \frac{1}{b_i}\sum_{j \in \textbf{B}_i} R_{t-1, j}
+$$
+$$
+\text{log}(\lambda_{t,i}) = \beta X_{t,i} + \rho \text{log}(R_{t-1,i}) + \gamma \text{log}(A_{t-1,i}) + s_t
+$$
+
+```{r, echo=FALSE, out.width="80%", fig.align="center"}
+knitr::include_graphics("figures/rho_gamma.png")
+```         
+          
+    
+    
+Idea 1:
+
+$$
+\text{log}(\lambda_{t,i}) = \beta X_{t,i} + \text{log}(e^\rho R_{t-1,i}) + \text{log}(e^\gamma A_{t-1,i}) + s_t
+$$
+
+```{r, echo=FALSE, out.width="80%", fig.align="center"}
+knitr::include_graphics("figures/rho_gamma_logswitch.png")
+```  
+
+Idea 2:
+
+$$
+\text{log}(\lambda_{t,i}) = \beta X_{t,i} + \text{log}(e^\rho R_{t-1,i} + e^\gamma A_{t-1,i}) + s_t
+$$
+
+```{r, echo=FALSE, out.width="80%", fig.align="center"}
+knitr::include_graphics("figures/rho_gamma_logcomb.png")
+```   
+
+

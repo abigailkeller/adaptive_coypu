@@ -157,8 +157,8 @@ model_code <- nimbleCode({
       
       log(lambda[t, i]) <- (
         beta * temp[t, i] + s_t[t] + 
-          log(exp(rho) * remaining[t - 1, i] + 1 +
-                exp(gamma) * neighbors_rem[t - 1, i])
+          log(gamma * rho * remaining[t - 1, i] + 1 +
+                (1 - gamma) * rho * neighbors_rem[t - 1, i])
       )
         
     }
@@ -188,8 +188,8 @@ model_code <- nimbleCode({
   p_sample ~ dunif(0, 1)
   
   beta ~ dunif(-10, 10)
-  rho ~ dunif(-10, 10)
-  gamma ~ dunif(-10, 10)
+  rho ~ dunif(0, 100)
+  gamma ~ dunif(0, 1)
   
   st_mean ~ dunif(-10, 10)
   st_sd ~ dunif(0, 10)
@@ -210,8 +210,8 @@ inits <- function(){
        sampled = array(1, dim(dat_st)),
        pic = pic.init, 
        beta = 0, 
-       rho = 0,
-       gamma = 0,
+       rho = 1,
+       gamma = 1,
        st_mean = 1,
        st_sd = 1,
        N = Nin,
@@ -302,7 +302,7 @@ out_sub <- list(out[[1]][sequence, ], out[[2]][sequence, ],
                 out[[3]][sequence, ], out[[4]][sequence, ])
 
 # save samples
-saveRDS(out_sub, "samples/samples_spillover_timeranef_rw_twoalpha_logcomb.rds")
+saveRDS(out_sub, "samples/samples_spillover_timeranef_rw_twoalpha_mean.rds")
 
 stopCluster(cl)
 
