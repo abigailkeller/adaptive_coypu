@@ -116,7 +116,7 @@ model_code <- nimbleCode({
   for (t in 1:M) { # loop over years
     
     # year ranef
-    s_t[t] ~ dnorm(st_mean, sd = st_sd)
+    s_t[t] ~ dlnorm(st_mean, sdlog = st_sd)
     
     for (i in 1:K) { # loop over sites
       
@@ -147,9 +147,8 @@ model_code <- nimbleCode({
       remaining[t - 1, i] <- N[t - 1, i] - n[t - 1, i]
       
       log(lambda[t, i]) <- (
-        s_t[t] + 
-          log(rho * remaining[t - 1, i] * 
-                (1 - remaining[t - 1, i] / exp(dd[i])) + 1)
+          log(s_t[t] + rho * remaining[t - 1, i] * 
+                (1 - remaining[t - 1, i] / exp(dd[i])))
       )
         
     }
@@ -212,7 +211,7 @@ inits <- function(){
        N = Nin,
        sigma_s = 1, 
        s_s = rnorm(K),
-       s_t = c(0, rowMeans(Nin)[2:9] - rowMeans(Nin)[1:8]) * 0.01
+       s_t = rep(1, 9)
        )
   }
 
@@ -256,11 +255,6 @@ out <- clusterEvalQ(cl, {
                                         "s_s", "s_t", "st_mean", "st_sd")
   )
   
-  # add HMC
-  # ModSpec$removeSamplers(target = c("s_s", "s_t", "beta", "sigma_s"))
-  # ModSpec$addSampler(target = c("s_s", "s_t", "beta", "sigma_s"),
-  #                    type = "NUTS")
-  
   Cmcmc <- buildMCMC(ModSpec)
   
   # compile MCMC and model
@@ -281,7 +275,7 @@ out_sub <- list(out[[1]][sequence, ], out[[2]][sequence, ],
                 out[[3]][sequence, ], out[[4]][sequence, ])
 
 # save samples
-saveRDS(out_sub, "samples/samples_timeranef_rw_twoalpha_dd_nobeta.rds")
+saveRDS(out_sub, "samples/samples_timeranef_rw_twoalpha_dd_logtest.rds")
 
 stopCluster(cl)
 

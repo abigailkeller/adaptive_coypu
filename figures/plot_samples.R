@@ -2,12 +2,12 @@ library(tidyverse)
 library(MCMCvis)
 library(viridis)
 
-samp <- readRDS("samples/samples_timeranef_rw_twoalpha_dd_nobeta2.rds")
+samp <- readRDS("samples/samples_timeranef_rw_twoalpha_dd_nobeta.rds")
 samp <- list(samp[[1]][500:3267, ], samp[[2]][500:3267, ],
              samp[[3]][500:3267, ], samp[[4]][500:3267, ])
 
-param1 <- "s_s[2]"
-param2 <- "N[1, 2]"
+param1 <- "st_mean"
+param2 <- "rho"
 param3 <- "beta"
 
 ggplot() +
