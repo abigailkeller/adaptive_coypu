@@ -2,19 +2,19 @@ library(tidyverse)
 library(MCMCvis)
 library(viridis)
 
-samp <- readRDS("samples/samples_timeranef_rw_twoalpha_dd_nobeta.rds")
+samp <- readRDS("samples/samples_timeranef_rw_twoalpha_dd_nobeta_space_stzero.rds")
 samp <- list(samp[[1]][500:3267, ], samp[[2]][500:3267, ],
              samp[[3]][500:3267, ], samp[[4]][500:3267, ])
 
-param1 <- "st_mean"
+param1 <- "gamma"
 param2 <- "rho"
-param3 <- "beta"
+param3 <- "s_t[2]"
 
 ggplot() +
   geom_point(aes(x = c(samp[[1]][, param1], samp[[2]][, param1],
                        samp[[3]][, param1], samp[[4]][, param1]),
-                 y = log(c(samp[[1]][, param2], samp[[2]][, param2], 
-                       samp[[3]][, param2], samp[[4]][, param2])))) +
+                 y = c(samp[[1]][, param2], samp[[2]][, param2], 
+                       samp[[3]][, param2], samp[[4]][, param2]))) +
   labs(x = param1, y = param2)
 
 ggplot() +
@@ -36,7 +36,7 @@ sum <- c(samp[[1]][, param1], samp[[2]][, param1],
 
 fsummary <- MCMCsummary(samp)
 
-param <- "N[1, 2]"
+param <- "dd[9]"
 
 ggplot() +
   geom_line(aes(x = 1:length(samp[[1]][, param]),

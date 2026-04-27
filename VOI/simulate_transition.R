@@ -69,7 +69,7 @@ dd_ind <- 136:150
 index_min <- which.min(samp[, "rho"])
 index_max <- which.max(samp[, "rho"])
 
-
+set.seed(456)
 # simulate 10 years of min index
 N_sim_min <- matrix(NA, nrow = 11, ncol = 15)
 N_sim_min[1, ] <- samp[index_min, Nstart_ind]
@@ -142,15 +142,4 @@ plot_Nstart_min + plot_Nend_min + plot_Nstart_max + plot_Nend_max +
                                         communes_shp$Nend_min,
                                         communes_shp$Nend_max))))
 
-##############################
-# create transition matrices #
-##############################
-
-# state space
-states <- seq(0, 300, 5)
-actions <- combn(1:15, 2)
-
-transition_min <- array(NA, nrow = )
-get_transition(params, N, dd,
-                           n_sites, n_visits, p_increase, site_increase)
 
