@@ -3,6 +3,7 @@ library(sp)
 library(spdep)
 library(tidyverse)
 library(patchwork)
+library(MCMCvis)
 
 get_transition_simple <- function(params, dd, N_seq, seq_st,
                                   n_visits, p_increase, a) {
@@ -49,8 +50,11 @@ get_transition_simple <- function(params, dd, N_seq, seq_st,
 }
 
 # read samples
-samp <- do.call(rbind,
-                readRDS("samples/samples_timeranef_rw_twoalpha_dd_nobeta.rds"))
+sample_file <- "samples/samples_timeranef_rw_twoalpha_dd_nobeta.rds"
+samp <- do.call(rbind, readRDS(sample_file))
+
+# get summary of samples
+summary <- MCMCsummary(readRDS(sample_file))
 
 # get Nstart indices
 Nstart_ind <- 1:15 * 9
@@ -68,105 +72,71 @@ index_max <- which.max(samp[, "rho"])
 ##############################
 
 # state and action spaces
-N_seq <- seq(0, 300, 20)
-states <- expand.grid(N_seq, N_seq, N_seq)
-# actions <- combn(1:15, 2)
-actions <- combn(1:3, 2)
 
+# create states based on carrying capacity of each site
+n_states <- 8
 n_sites <- 15
+n_choice <- 2
 
-seq_st <- seq(-2, 2, 0.1)
-
-# Initialize matrix
-transition_min <- array(0, dim = c(nrow(states), nrow(states), ncol(actions)))
-
-for (s in 1:n_states) {
-  for (s_next in 1:n_states) {
-    # Current components
-    curr_x <- states$x[s]
-    curr_y <- states$y[s]
-    
-    # Next components
-    next_x <- states$x[s_next]
-    next_y <- states$y[s_next]
-    
-    # Probabilities
-    # Prob_y only looks at y, ignores x
-    prob_x <- get_prob_x(next_x, curr_x, curr_y, action)
-    prob_y <- get_prob_y(next_y, curr_y, action) 
-    
-    T_matrix[s, s_next] <- prob_x * prob_y
-  }
+states <- matrix(NA, nrow = n_states, ncol = n_sites)
+for (i in 1:n_sites) {
+  
+  states[, i] <- seq(from = 0, to = exp(summary[dd_ind[i], "mean"]), 
+                     length.out = n_states)
+  
 }
 
+action_set <- combn(n_sites, n_choice)
+actions <- vapply(seq_len(ncol(action_set)), 
+                  function(i) tabulate(action_set[, i], nbins = n_sites), 
+                  integer(n_sites))
+# do nothing action
+actions <- cbind(actions, rep(0, n_sites))
 
 
+# sequence of possible s_t
+seq_st <- seq(-2, 2, 0.1)
 
 
-transition_min <- array(NA, dim = c(length(states) * n_sites, 
-                                    length(states) * n_sites, 
+transition_min <- array(NA, dim = c(n_states, 
+                                    n_states * n_sites, 
                                     length(actions)))
 
 for (i in seq_along(1:n_sites)) {
+  
+  col_start <- (i - 1) * n_states + 1
+  col_end <- i * n_states
+  
   for (j in seq_along(1:ncol(actions))) {
-    get_transition_simple(samp[index_min,], N, dd,
-                          n_sites, n_visits, p_increase, site_increase)
+    
+    transition_min[, col_start:col_end, j] <- get_transition_simple(
+      params = samp[index_min, ], dd = samp[index_min, dd_ind[i]], 
+      N_seq = states[, i], seq_st, n_visits = 8, p_increase = 2, 
+      a = actions[i, j]
+      )
   }
 }
-test <- get_transition_simple(params = samp[index_min,], 
-                              dd = samp[index_min, dd_ind[1]], 
-                              N_seq = states, seq_st,
-                              n_visits = 8, p_increase = 2, a = 1)
 
-(samp[index_min,], N, dd,
-               n_sites, n_visits, p_increase, site_increase)
 
-# simulate 10 years of min index
-N_sim_min <- matrix(NA, nrow = 11, ncol = 15)
-N_sim_min[1, ] <- samp[index_min, Nstart_ind]
-for (t in 1:10) {
-  N_sim_min[t + 1, ] <- get_transition(params = samp[index_min,], 
-                                       N = N_sim_min[1, ], 
-                                       dd = samp[index_min, dd_ind], 
-                                       n_sites = 15, n_visits = 8,
-                                       p_increase = 2, site_increase = c(4, 13))
-}
+transition_max <- array(NA, dim = c(n_states, 
+                                    n_states * n_sites, 
+                                    length(actions)))
 
-# simulate 10 years of max index
-N_sim_max <- matrix(NA, nrow = 11, ncol = 15)
-N_sim_max[1, ] <- samp[index_max, Nstart_ind]
-for (t in 1:10) {
-  N_sim_max[t + 1, ] <- get_transition(params = samp[index_max,], 
-                                       N = N_sim_max[1, ], 
-                                       dd = samp[index_max, dd_ind], 
-                                       n_sites = 15, n_visits = 8,
-                                       p_increase = 2, site_increase = c(4, 13))
-}
-
-# Define state spaces
-X <- 1:5
-Y <- 1:3
-states <- expand.grid(y = Y, x = X) # Y varies fastest to match matrix row-major
-n_states <- nrow(states)
-
-# Initialize matrix
-T_matrix <- matrix(0, nrow = n_states, ncol = n_states)
-
-for (s in 1:n_states) {
-  for (s_next in 1:n_states) {
-    # Current components
-    curr_x <- states$x[s]
-    curr_y <- states$y[s]
+for (i in seq_along(1:n_sites)) {
+  
+  col_start <- (i - 1) * n_states + 1
+  col_end <- i * n_states
+  
+  for (j in seq_along(1:ncol(actions))) {
     
-    # Next components
-    next_x <- states$x[s_next]
-    next_y <- states$y[s_next]
-    
-    # Probabilities
-    # Prob_y only looks at y, ignores x
-    prob_x <- get_prob_x(next_x, curr_x, curr_y, action)
-    prob_y <- get_prob_y(next_y, curr_y, action) 
-    
-    T_matrix[s, s_next] <- prob_x * prob_y
+    transition_max[, col_start:col_end, j] <- get_transition_simple(
+      params = samp[index_max, ], dd = samp[index_max, dd_ind[i]], 
+      N_seq = states[, i], seq_st, n_visits = 8, p_increase = 2, 
+      a = actions[i, j]
+    )
   }
 }
+
+# save transition matrices
+saveRDS(transition_min, "transition_matrices/t_min.rds")
+saveRDS(transition_max, "transition_matrices/t_max.rds")
