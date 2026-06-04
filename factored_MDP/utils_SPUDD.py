@@ -3,6 +3,8 @@ from functools import reduce
 import pandas as pd
 import itertools
 import matplotlib.pyplot as plt
+from utils_ADD import *
+import numpy as np
 
 ########################################
 # helper functions for SPUDD algorithm #
@@ -79,7 +81,7 @@ def max_diff(mgr, a, b):
     _collect(diff)
     return max(vals)
 
-def regress(mgr, V, transition_adds_a, discount):
+def regress(mgr, V, subsystems, transition_adds_a, discount):
     """
     Compute expected discounted future value for action a.
     Compute Q(s, a) = discount * sum_{s'} P(s'|s,a) * V(s')
@@ -134,7 +136,7 @@ def rename_to_primed(mgr, V, subsystems):
 # SPUDD value iteration algorithm #
 ###################################
 
-def spudd(mgr, reward_adds, transition_adds, discount, tolerance, max_iter=1000):
+def spudd(mgr, subsystems, reward_adds, transition_adds, discount, tolerance, max_iter=1000):
     """
     SPUDD value iteration.
     
@@ -167,7 +169,7 @@ def spudd(mgr, reward_adds, transition_adds, discount, tolerance, max_iter=1000)
             # Regress V through transition
             # Compute the expected discounted future value
             # discount * sum_{s'} P(s'|s,a) * V(s')
-            future = regress(mgr, V_primed, transition_adds[a_idx], discount)
+            future = regress(mgr, V_primed, subsystems, transition_adds[a_idx], discount)
             
             # Add immediate reward to future value: Q(s,a) = R(s,a) + discount * E[V(s')]
             Q_a = mgr.apply(operator.add, reward_adds[a_name], future)
@@ -202,7 +204,7 @@ def spudd(mgr, reward_adds, transition_adds, discount, tolerance, max_iter=1000)
     policy_adds = []
     V_primed = rename_to_primed(mgr, V, subsystems)
     for a_idx, a_name in enumerate(action_names):
-        future = regress(mgr, V_primed, transition_adds[a_idx], discount)
+        future = regress(mgr, V_primed, subsystems, transition_adds[a_idx], discount)
         Q_a = mgr.apply(operator.add, reward_adds[a_name], future)
         policy_adds.append(Q_a)
     
@@ -213,7 +215,7 @@ def spudd(mgr, reward_adds, transition_adds, discount, tolerance, max_iter=1000)
 # Utils for interpreting SPUDD output #
 #######################################
 
-def get_optimal_action(mgr, policy_adds, state):
+def get_optimal_action(mgr, reward_adds, policy_adds, state):
     """
     Extract optimal action for a given state
     state: dict e.g. {"X": 50, "Y": 100, "Z": 0}
@@ -233,7 +235,7 @@ def get_optimal_action(mgr, policy_adds, state):
           f"optimal action = {action_names[best]}")
     return best
 
-def get_value_df(mgr, states):
+def get_value_df(mgr, V, states):
     """
     Get optimal value function for each state, return a dataframe.
     """
@@ -248,7 +250,7 @@ def get_value_df(mgr, states):
 
     return(df)
 
-def plot_qvalues(reward_adds, states, action_names):
+def plot_qvalues(mgr, reward_adds, policy_adds, states):
     """
     Plot optimal values for each state.
     """
