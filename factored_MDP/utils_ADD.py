@@ -20,7 +20,7 @@ class Leaf:
 @dataclass(frozen=True)
 class Node:
     var:      str # node name
-    children: tuple  # node children; one per state value, ordered by STATE_VALS
+    children: tuple  # node children; one per state value, ordered by state_vals
 
     def __repr__(self):
         return f"Node({self.var})"
